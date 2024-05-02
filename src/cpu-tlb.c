@@ -6,7 +6,7 @@
  * a personal to use and modify the Licensed Source Code for 
  * the sole purpose of studying during attending the course CO2018.
  */
-//#ifdef CPU_TLB
+// #ifdef CPU_TLB
 /*
  * CPU TLB
  * TLB module cpu/cpu-tlb.c
@@ -16,8 +16,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "cpu-tlbcache.c"
-#include "mm-vm.c"
+// #include "cpu-tlbcache.c"
+// #include "mm-vm.c"
 
 int tlb_change_all_page_tables_of(struct pcb_t *proc,  struct memphy_struct * mp)
 {
@@ -214,4 +214,4 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   return 0;
 }
 
-//#endif
+// #endif

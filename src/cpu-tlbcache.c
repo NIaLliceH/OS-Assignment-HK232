@@ -19,6 +19,7 @@
 
 #include "mm.h"
 #include <stdlib.h>
+#include <stdio.h>
 
 //TLB FEATURES:
 //FULLY-ASSOC
@@ -50,32 +51,36 @@
 #define FRMNUM_LOBIT 0
 
 //TLB Entry bit-masks
-#define TLB_ENTRY_FREE_MASK GENMASK(FREE_HIBIT, FREE_LOBIT)
-#define TLB_ENTRY_VALID_MASK BIT(VALID_BIT) 
+#define TLB_BITS_PER_LONG 64
+#define TLB_GENMASK(h, l) \
+	(((~0ULL) << (l)) & (~0ULL >> (TLB_BITS_PER_LONG  - (h) - 1)))
+
+#define TLB_ENTRY_FREE_MASK TLB_GENMASK(FREE_HIBIT, FREE_LOBIT)
+#define TLB_ENTRY_VALID_MASK BIT_ULL(VALID_BIT) 
 // #define TLB_ENTRY_DIRTY_MASK BIT(DIRTY_BIT)
-#define TLB_ENTRY_TAG_MASK GENMASK(TAG_HIBIT, TAG_LOBIT)
-#define TLB_ENTRY_PID_MASK GENMASK(PID_HIBIT, PID_LOBIT)
-#define TLB_ENTRY_FRMNUM_MASK GENMASK(FRMNUM_HIBIT, FRMNUM_LOBIT)
+#define TLB_ENTRY_TAG_MASK TLB_GENMASK(TAG_HIBIT, TAG_LOBIT)
+#define TLB_ENTRY_PID_MASK TLB_GENMASK(PID_HIBIT, PID_LOBIT)
+#define TLB_ENTRY_FRMNUM_MASK TLB_GENMASK(FRMNUM_HIBIT, FRMNUM_LOBIT)
 
 //COPIED FROM mm.h FOR EASIER VIEWING
-#define SETVAL(v,value,mask,offst) (v=(v&~mask)|((value<<offst)&mask))
-#define GETVAL(v,mask,offst) ((v&mask)>>offst)
+#define TLB_SETVAL(v,value,mask,offst) (v=((uint64_t)v&~mask)|(((uint64_t)value<<offst)&mask))
+#define TLB_GETVAL(v,mask,offst) ((v&mask)>>offst)
 
 //TLB Entry bits extract
-#define TLB_FREE(x) GETVAL(x, TLB_ENTRY_FREE_MASK, FREE_LOBIT)
-#define TLB_VALID(x) GETVAL(x, TLB_ENTRY_VALID_MASK, VALID_BIT)
-// #define TLB_DIRTY(x) GETVAL(x, TLB_ENTRY_DIRTY_MASK, DIRTY_BIT)
-#define TLB_TAG(x) GETVAL(x, TLB_ENTRY_TAG_MASK, TAG_LOBIT)
-#define TLB_PID(x) GETVAL(x, TLB_ENTRY_PID_MASK, PID_LOBIT)
-#define TLB_FRMNUM(x) GETVAL(x, TLB_ENTRY_FRMNUM_MASK, FRMNUM_LOBIT)
+#define TLB_FREE(x) TLB_GETVAL(x, TLB_ENTRY_FREE_MASK, FREE_LOBIT)
+#define TLB_VALID(x) TLB_GETVAL(x, TLB_ENTRY_VALID_MASK, VALID_BIT)
+// #define TLB_DIRTY(x) TLB_GETVAL(x, TLB_ENTRY_DIRTY_MASK, DIRTY_BIT)
+#define TLB_TAG(x) TLB_GETVAL(x, TLB_ENTRY_TAG_MASK, TAG_LOBIT)
+#define TLB_PID(x) TLB_GETVAL(x, TLB_ENTRY_PID_MASK, PID_LOBIT)
+#define TLB_FRMNUM(x) TLB_GETVAL(x, TLB_ENTRY_FRMNUM_MASK, FRMNUM_LOBIT)
 
 //TLB Entry bits set
-#define SET_TLB_FREE(x, value) SETVAL(x, value, TLB_ENTRY_FREE_MASK, FREE_LOBIT)
-#define SET_TLB_VALID(x, value) SETVAL(x, value, TLB_ENTRY_VALID_MASK, VALID_BIT)
-// #define SET_TLB_DIRTY(x, value) SETVAL(x, value, TLB_ENTRY_DIRTY_MASK, DIRTY_BIT)
-#define SET_TLB_TAG(x, value) SETVAL(x, value, TLB_ENTRY_TAG_MASK, TAG_LOBIT)
-#define SET_TLB_PID(x, value) SETVAL(x, value, TLB_ENTRY_PID_MASK, PID_LOBIT)
-#define SET_TLB_FRMNUM(x, value) SETVAL(x, value, TLB_ENTRY_FRMNUM_MASK, FRMNUM_LOBIT)
+#define SET_TLB_FREE(x, value) TLB_SETVAL(x, value, TLB_ENTRY_FREE_MASK, FREE_LOBIT)
+#define SET_TLB_VALID(x, value) TLB_SETVAL(x, value, TLB_ENTRY_VALID_MASK, VALID_BIT)
+// #define SET_TLB_DIRTY(x, value) TLB_SETVAL(x, value, TLB_ENTRY_DIRTY_MASK, DIRTY_BIT)
+#define SET_TLB_TAG(x, value) TLB_SETVAL(x, value, TLB_ENTRY_TAG_MASK, TAG_LOBIT)
+#define SET_TLB_PID(x, value) TLB_SETVAL(x, value, TLB_ENTRY_PID_MASK, PID_LOBIT)
+#define SET_TLB_FRMNUM(x, value) TLB_SETVAL(x, value, TLB_ENTRY_FRMNUM_MASK, FRMNUM_LOBIT)
 
 
 #define init_tlbcache(mp,sz,...) init_memphy(mp, sz, (1, ##__VA_ARGS__))
@@ -103,8 +108,8 @@ int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* value)
 
    //SIMULATE FULLY-ASSOC PARALLEL COMPARATORS BY LOOPING
    int index = 0;
-   for (index; index < storageSz; index++){
-      uint64_t *entry = storage[index];
+   for (; index < storageSz; index++){
+      uint64_t *entry = &(storage[index]);
       if (TLB_VALID(*entry) 
       && TLB_TAG(*entry) == pgnum 
       && TLB_PID(*entry) == pid){
@@ -146,7 +151,7 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
    int index;
    //PRIORITIZE FINDING EXISTING ENTRY TO UPDATE
    for (index = 0; index < storageSz; index++){
-      uint64_t *entry = storage[index];
+      uint64_t *entry = &(storage[index]);
       if (TLB_VALID(*entry) 
       && TLB_TAG(*entry) == pgnum 
       && TLB_PID(*entry) == pid){
@@ -159,7 +164,7 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
 
    //FIND FREE/INVALID SPACE
    for (index = 0; index < storageSz; index++){
-      uint64_t *entry = storage[index];
+      uint64_t *entry = &(storage[index]);
       if (!TLB_VALID(*entry)){
          //FOUND SPACE
          set_TLB_entry(entry, 1, pgnum, pid, value);
@@ -170,7 +175,7 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
 
    //FREE SPACE NOT FOUND, REPLACE EXISTING
    int r = rand() % storageSz;
-   uint64_t *victimEntry = storage[r];
+   uint64_t *victimEntry = &(storage[r]);
    set_TLB_entry(victimEntry, 1, pgnum, pid, value);
 
    return 0;
@@ -188,7 +193,7 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
 
    int index;
    for (index = 0; index < storageSz; index++){
-      uint64_t *entry = storage[index];
+      uint64_t *entry = &(storage[index]);
       if (TLB_VALID(*entry) && TLB_PID(*entry) == pid){
          //FOUND EXISTING ENTRY OF PID
          if (pgnum < 0 || TLB_TAG(*entry) == pgnum)
