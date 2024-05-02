@@ -105,12 +105,11 @@ int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* value)
    int index = 0;
    for (index; index < storageSz; index++){
       uint64_t *entry = storage[index];
-      if (TLB_VALID(*entry)){
-         //ENTRY VALID
-         if (TLB_TAG(*entry) == pgnum && TLB_PID(*entry) == pid){
-            *value = TLB_FRMNUM(*entry);
-            return 0;
-         }
+      if (TLB_VALID(*entry) 
+      && TLB_TAG(*entry) == pgnum 
+      && TLB_PID(*entry) == pid){
+         *value = TLB_FRMNUM(*entry);
+         return 0;
       }
    }
    
@@ -144,11 +143,25 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
    uint64_t* storage = (uint64_t*)tlb->storage;
    int storageSz = tlb->maxsz / sizeof(uint64_t);
 
-   int index = 0;
-   for (index; index < storageSz; index++){
+   int index;
+   //PRIORITIZE FINDING EXISTING ENTRY TO UPDATE
+   for (index = 0; index < storageSz; index++){
+      uint64_t *entry = storage[index];
+      if (TLB_VALID(*entry) 
+      && TLB_TAG(*entry) == pgnum 
+      && TLB_PID(*entry) == pid){
+         //FOUND EXISTING ENTRY
+         set_TLB_entry(entry, 1, pgnum, pid, value);
+         
+         return 0;
+      }
+   }
+
+   //FIND FREE/INVALID SPACE
+   for (index = 0; index < storageSz; index++){
       uint64_t *entry = storage[index];
       if (!TLB_VALID(*entry)){
-         //FOUND FREE SPACE
+         //FOUND SPACE
          set_TLB_entry(entry, 1, pgnum, pid, value);
          
          return 0;
@@ -158,11 +171,34 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
    //FREE SPACE NOT FOUND, REPLACE EXISTING
    int r = rand() % storageSz;
    uint64_t *victimEntry = storage[r];
-
    set_TLB_entry(victimEntry, 1, pgnum, pid, value);
 
    return 0;
 }
+
+//pgnum = -1 to invalidate all entries with pid
+int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
+{
+   /* TODO: the identify info is mapped to 
+    *      cache line by employing:
+    *      direct mapped, associated mapping etc.
+    */
+   uint64_t* storage = (uint64_t*)tlb->storage;
+   int storageSz = tlb->maxsz / sizeof(uint64_t);
+
+   int index;
+   for (index = 0; index < storageSz; index++){
+      uint64_t *entry = storage[index];
+      if (TLB_VALID(*entry) && TLB_PID(*entry) == pid){
+         //FOUND EXISTING ENTRY OF PID
+         if (pgnum < 0 || TLB_TAG(*entry) == pgnum)
+            SET_TLB_VALID(*entry, 0);
+      }
+   }
+
+   return 0;
+}
+
 
 #pragma region UNUSED
 

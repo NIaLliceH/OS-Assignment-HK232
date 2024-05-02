@@ -17,20 +17,21 @@
 #include <stdio.h>
 
 #include "cpu-tlbcache.c"
+#include "mm-vm.c"
 
 int tlb_change_all_page_tables_of(struct pcb_t *proc,  struct memphy_struct * mp)
 {
   /* TODO update all page table directory info 
    *      in flush or wipe TLB (if needed)
    */
-
+  //???
   return 0;
 }
 
 int tlb_flush_tlb_of(struct pcb_t *proc, struct memphy_struct * mp)
 {
   /* TODO flush tlb cached*/
-
+  tlb_cache_invalidate(proc->tlb, proc->pid, -1);
   return 0;
 }
 
@@ -41,15 +42,25 @@ int tlb_flush_tlb_of(struct pcb_t *proc, struct memphy_struct * mp)
  */
 int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 {
-  int addr, val;
+  int addr;
 
   /* By default using vmaid = 0 */
-  val = __alloc(proc, 0, reg_index, size, &addr);
+  if (__alloc(proc, 0, reg_index, size, &addr) != 0){
+    return -1;
+  }
+
+  int pgn = PAGING_PGN(addr);
+  int frmnum = -1;
+  if (pg_getpage(proc->mm, pgn, &frmnum, proc) != 0)
+    return -1;
 
   /* TODO update TLB CACHED frame num of the new allocated page(s)*/
   /* by using tlb_cache_read()/tlb_cache_write()*/
 
-  return val;
+  if (tlb_cache_write(proc->tlb, proc->pid, pgn, frmnum) != 0)
+    return -1;
+
+  return 0;
 }
 
 /*pgfree - CPU TLB-based free a region memory
@@ -59,20 +70,23 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
  */
 int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
 {
-  __free(proc, 0, reg_index);
 
-    struct vm_rg_struct *currg = get_symrg_byid(proc->mm, reg_index);
+
+  struct vm_rg_struct *currg = get_symrg_byid(proc->mm, reg_index);
   struct vm_area_struct *cur_vma = get_vma_by_num(proc->mm, 0);
   if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
 	  return -1;
 
   //CPU address calculate
-  int addr = currg->rg_start + offset;
-  int pgn = PAGING_PGN(addr);
-  int off = PAGING_OFFST(addr);
+  int addr = currg->rg_start;
+  int pgn =  PAGING_PGN(addr);
 
   /* TODO update TLB CACHED frame num of freed page(s)*/
   /* by using tlb_cache_read()/tlb_cache_write()*/
+
+  tlb_cache_invalidate(proc->tlb, proc->pid, pgn);
+
+  __free(proc, 0, reg_index);
 
   return 0;
 }
