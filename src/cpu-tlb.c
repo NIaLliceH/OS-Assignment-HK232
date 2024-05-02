@@ -61,6 +61,16 @@ int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
 {
   __free(proc, 0, reg_index);
 
+    struct vm_rg_struct *currg = get_symrg_byid(proc->mm, reg_index);
+  struct vm_area_struct *cur_vma = get_vma_by_num(proc->mm, 0);
+  if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
+	  return -1;
+
+  //CPU address calculate
+  int addr = currg->rg_start + offset;
+  int pgn = PAGING_PGN(addr);
+  int off = PAGING_OFFST(addr);
+
   /* TODO update TLB CACHED frame num of freed page(s)*/
   /* by using tlb_cache_read()/tlb_cache_write()*/
 
@@ -82,14 +92,6 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   /* TODO retrieve TLB CACHED frame num of accessing page(s)*/
   /* by using tlb_cache_read()/tlb_cache_write()*/
   /* frmnum is return value of tlb_cache_read/write value*/
-
-  //4-way assoc:
-  //addr:
-  //tag = pgn / 4 = 12 bits
-  //index = 2 bits
-  //pid = 32 bits
-  //data:
-  //frmnum = 12 bits
 
   ///get VM area and current region
   struct vm_rg_struct *currg = get_symrg_byid(proc->mm, source);
