@@ -24,7 +24,6 @@
 //TLB FEATURES:
 //FULLY-ASSOC
 //RANDOM REPLACEMENT
-//WRITE-BACK WHEN REPLACED
 
 /* TLB Entry BIT */
 //FILLER BITS TO GET TO 64 BITS PER ENTRY
@@ -107,8 +106,7 @@ int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* value)
    int storageSz = tlb->maxsz / sizeof(uint64_t);
 
    //SIMULATE FULLY-ASSOC PARALLEL COMPARATORS BY LOOPING
-   int index = 0;
-   for (; index < storageSz; index++){
+   for (int index = 0; index < storageSz; index++){
       uint64_t *entry = &(storage[index]);
       if (TLB_VALID(*entry) 
       && TLB_TAG(*entry) == pgnum 
@@ -132,7 +130,7 @@ int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* value)
 //equivalent of pg_setpage
 
 void set_TLB_entry(uint64_t *entry, int valid, int pgnum, int pid, int frmnum){
-   *entry = (*entry) & 0;
+   *entry = 0;
    SET_TLB_VALID(*entry, valid);
    SET_TLB_TAG(*entry, pgnum);
    SET_TLB_PID(*entry, pid);
@@ -148,9 +146,9 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
    uint64_t* storage = (uint64_t*)tlb->storage;
    int storageSz = tlb->maxsz / sizeof(uint64_t);
 
-   int index;
+   
    //PRIORITIZE FINDING EXISTING ENTRY TO UPDATE
-   for (index = 0; index < storageSz; index++){
+   for (int index = 0; index < storageSz; index++){
       uint64_t *entry = &(storage[index]);
       if (TLB_VALID(*entry) 
       && TLB_TAG(*entry) == pgnum 
@@ -163,7 +161,7 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
    }
 
    //FIND FREE/INVALID SPACE
-   for (index = 0; index < storageSz; index++){
+   for (int index = 0; index < storageSz; index++){
       uint64_t *entry = &(storage[index]);
       if (!TLB_VALID(*entry)){
          //FOUND SPACE
