@@ -6,7 +6,6 @@
  * a personal to use and modify the Licensed Source Code for 
  * the sole purpose of studying during attending the course CO2018.
  */
-// #ifdef CPU_TLB
 /*
  * CPU TLB
  * TLB module cpu/cpu-tlb.c
@@ -16,8 +15,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-// #include "cpu-tlbcache.c"
-// #include "mm-vm.c"
+#ifdef CPU_TLB
+#include "cpu-tlbcache.h"
 
 int tlb_change_all_page_tables_of(struct pcb_t *proc,  struct memphy_struct * mp)
 {
@@ -148,7 +147,7 @@ int tlbread(struct pcb_t * proc, uint32_t source,
 
   //Read from memphy
   int phyaddr = (frmnum << PAGING_ADDR_FPN_LOBIT) + off;
-  MEMPHY_read(proc->mram, phyaddr, data);
+  MEMPHY_read(proc->mram, phyaddr, &data);
 
   destination = (uint32_t) data;
   return 0;
@@ -214,4 +213,4 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   return 0;
 }
 
-// #endif
+#endif

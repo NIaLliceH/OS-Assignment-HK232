@@ -6,7 +6,7 @@
  * a personal to use and modify the Licensed Source Code for 
  * the sole purpose of studying during attending the course CO2018.
  */
-//#ifdef MM_TLB
+// #ifdef MM_TLB
 /*
  * Memory physical based TLB Cache
  * TLB cache module tlb/tlbcache.c
@@ -16,76 +16,12 @@
  * and runs at high speed
  */
 
-
 #include "mm.h"
+#include "cpu-tlbcache.h"
 #include <stdlib.h>
 #include <stdio.h>
 
-//TLB FEATURES:
-//FULLY-ASSOC
-//RANDOM REPLACEMENT
-
-/* TLB Entry BIT */
-//FILLER BITS TO GET TO 64 BITS PER ENTRY
-#define FREE_HIBIT 63
-#define FREE_LOBIT 59
-
-//ENTRY IS BEING USED OR NOT
-#define VALID_BIT 58
-
-//UNUSED
-//FOR WRITE-BACK CHECK WHEN ENTRY IS REPLACED
-// #define DIRTY_BIT 58
-
-//FULLY-ASSOC, TAG BIT = PGN BIT = 14
-#define TAG_HIBIT 57
-#define TAG_LOBIT 44
-
-//PID BIT = 32
-#define PID_HIBIT 43
-#define PID_LOBIT 12
-
-//FRMNUM BIT = 12
-#define FRMNUM_HIBIT 11
-#define FRMNUM_LOBIT 0
-
-//TLB Entry bit-masks
-#define TLB_BITS_PER_LONG 64
-#define TLB_GENMASK(h, l) \
-	(((~0ULL) << (l)) & (~0ULL >> (TLB_BITS_PER_LONG  - (h) - 1)))
-
-#define TLB_ENTRY_FREE_MASK TLB_GENMASK(FREE_HIBIT, FREE_LOBIT)
-#define TLB_ENTRY_VALID_MASK BIT_ULL(VALID_BIT) 
-// #define TLB_ENTRY_DIRTY_MASK BIT(DIRTY_BIT)
-#define TLB_ENTRY_TAG_MASK TLB_GENMASK(TAG_HIBIT, TAG_LOBIT)
-#define TLB_ENTRY_PID_MASK TLB_GENMASK(PID_HIBIT, PID_LOBIT)
-#define TLB_ENTRY_FRMNUM_MASK TLB_GENMASK(FRMNUM_HIBIT, FRMNUM_LOBIT)
-
-//COPIED FROM mm.h FOR EASIER VIEWING
-#define TLB_SETVAL(v,value,mask,offst) (v=((uint64_t)v&~mask)|(((uint64_t)value<<offst)&mask))
-#define TLB_GETVAL(v,mask,offst) ((v&mask)>>offst)
-
-//TLB Entry bits extract
-#define TLB_FREE(x) TLB_GETVAL(x, TLB_ENTRY_FREE_MASK, FREE_LOBIT)
-#define TLB_VALID(x) TLB_GETVAL(x, TLB_ENTRY_VALID_MASK, VALID_BIT)
-// #define TLB_DIRTY(x) TLB_GETVAL(x, TLB_ENTRY_DIRTY_MASK, DIRTY_BIT)
-#define TLB_TAG(x) TLB_GETVAL(x, TLB_ENTRY_TAG_MASK, TAG_LOBIT)
-#define TLB_PID(x) TLB_GETVAL(x, TLB_ENTRY_PID_MASK, PID_LOBIT)
-#define TLB_FRMNUM(x) TLB_GETVAL(x, TLB_ENTRY_FRMNUM_MASK, FRMNUM_LOBIT)
-
-//TLB Entry bits set
-#define SET_TLB_FREE(x, value) TLB_SETVAL(x, value, TLB_ENTRY_FREE_MASK, FREE_LOBIT)
-#define SET_TLB_VALID(x, value) TLB_SETVAL(x, value, TLB_ENTRY_VALID_MASK, VALID_BIT)
-// #define SET_TLB_DIRTY(x, value) TLB_SETVAL(x, value, TLB_ENTRY_DIRTY_MASK, DIRTY_BIT)
-#define SET_TLB_TAG(x, value) TLB_SETVAL(x, value, TLB_ENTRY_TAG_MASK, TAG_LOBIT)
-#define SET_TLB_PID(x, value) TLB_SETVAL(x, value, TLB_ENTRY_PID_MASK, PID_LOBIT)
-#define SET_TLB_FRMNUM(x, value) TLB_SETVAL(x, value, TLB_ENTRY_FRMNUM_MASK, FRMNUM_LOBIT)
-
-
 #define init_tlbcache(mp,sz,...) init_memphy(mp, sz, (1, ##__VA_ARGS__))
-
-//in bytes
-#define ENTRY_SZ (((FREE_HIBIT - FRMNUM_LOBIT) + 1) / 8)
 
 /*
  *  tlb_cache_read read TLB cache device
@@ -202,50 +138,49 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
    return 0;
 }
 
+// #pragma region UNUSED
 
-#pragma region UNUSED
+// /*
+//  *  TLBMEMPHY_read natively supports MEMPHY device interfaces
+//  *  @mp: memphy struct
+//  *  @addr: address
+//  *  @value: obtained value
+//  */
+// int TLBMEMPHY_read(struct memphy_struct * mp, int addr, BYTE *value)
+// {
+//    if (mp == NULL)
+//      return -1;
 
-/*
- *  TLBMEMPHY_read natively supports MEMPHY device interfaces
- *  @mp: memphy struct
- *  @addr: address
- *  @value: obtained value
- */
-int TLBMEMPHY_read(struct memphy_struct * mp, int addr, BYTE *value)
-{
-   if (mp == NULL)
-     return -1;
+//    /* TLB cached is random access by native */
+//    *value = mp->storage[addr];
 
-   /* TLB cached is random access by native */
-   *value = mp->storage[addr];
-
-   return 0;
-}
+//    return 0;
+// }
 
 
-/*
- *  TLBMEMPHY_write natively supports MEMPHY device interfaces
- *  @mp: memphy struct
- *  @addr: address
- *  @data: written data
- */
-int TLBMEMPHY_write(struct memphy_struct * mp, int addr, BYTE data)
-{
-   if (mp == NULL)
-     return -1;
+// /*
+//  *  TLBMEMPHY_write natively supports MEMPHY device interfaces
+//  *  @mp: memphy struct
+//  *  @addr: address
+//  *  @data: written data
+//  */
+// int TLBMEMPHY_write(struct memphy_struct * mp, int addr, BYTE data)
+// {
+//    if (mp == NULL)
+//      return -1;
 
-   /* TLB cached is random access by native */
-   mp->storage[addr] = data;
+//    /* TLB cached is random access by native */
+//    mp->storage[addr] = data;
 
-   return 0;
-}
+//    return 0;
+// }
 
-/*
- *  TLBMEMPHY_format natively supports MEMPHY device interfaces
- *  @mp: memphy struct
- */
+// /*
+//  *  TLBMEMPHY_format natively supports MEMPHY device interfaces
+//  *  @mp: memphy struct
+//  */
 
-#pragma endregion
+// #pragma endregion
 
 int TLBMEMPHY_dump(struct memphy_struct * mp)
 {
