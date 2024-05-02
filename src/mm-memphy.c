@@ -160,8 +160,29 @@ int MEMPHY_dump(struct memphy_struct * mp)
     /*TODO dump memphy contnt mp->storage 
      *     for tracing the memory content
      */
+   #ifdef OUTPUT_FOLDER
+      FILE *output_file = mp->file;
+      fprintf(output_file, "===== PHYSICAL MEMORY DUMP =====\n");
+   #endif
 
-    return 0;
+   printf("===== PHYSICAL MEMORY DUMP =====\n");
+   for (int i = 0; i < mp->maxsz; ++i)
+      {
+         if (mp->storage[i] != 0)
+      {
+   #ifdef OUTPUT_FOLDER
+         fprintf(output_file, "BYTE %08x: %d\n", i, mp->storage[i]);
+   #endif
+         printf("BYTE %08x: %d\n", i, mp->storage[i]);
+      }
+      }
+   #ifdef OUTPUT_FOLDER
+      fprintf(output_file, "===== PHYSICAL MEMORY END-DUMP =====\n");
+      fprintf(output_file, "================================================================\n");
+   #endif
+   printf("===== PHYSICAL MEMORY END-DUMP =====\n");
+   printf("================================================================\n");
+   return 0;
 }
 
 int MEMPHY_put_freefp(struct memphy_struct *mp, int fpn)
