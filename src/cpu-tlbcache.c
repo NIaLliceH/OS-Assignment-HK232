@@ -20,7 +20,39 @@
 #include "mm.h"
 #include <stdlib.h>
 
+
+
+#define N_ASSOC 4 //N-way associative
+
+/* TLBEntry BIT */
+#define TLB_ENTRY_PRESENT_MASK BIT(31) 
+
+// #define PAGING_PTE_SWAPPED_MASK BIT(30)
+// #define PAGING_PTE_RESERVE_MASK BIT(29)
+// #define PAGING_PTE_DIRTY_MASK BIT(28)
+// #define PAGING_PTE_EMPTY01_MASK BIT(14)
+// #define PAGING_PTE_EMPTY02_MASK BIT(13)
+
 #define init_tlbcache(mp,sz,...) init_memphy(mp, sz, (1, ##__VA_ARGS__))
+
+static uint16_t time = 0;
+//Entry 80 bits => 10 bytes
+struct tlbEntry {
+   int valid; // 1 bit
+   int pid; // 32 bits
+   int time; // 80 - sum = 21 bits
+   
+   // int pgn; // 14 bits
+   //=> tag + setOffset
+   int tag; //12 bits
+   int setOffset; //2 bits
+
+   int frmnum; // 12 bits
+};
+
+#define STR_INTVL 10
+
+
 
 /*
  *  tlb_cache_read read TLB cache device
@@ -29,12 +61,19 @@
  *  @pgnum: page number
  *  @value: obtained value
  */
-int tlb_cache_read(struct memphy_struct * mp, int pid, int pgnum, BYTE value)
+//equivalent of pg_getpage
+int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* value)
 {
    /* TODO: the identify info is mapped to 
     *      cache line by employing:
     *      direct mapped, associated mapping etc.
     */
+   int storageMaxSize = tlb->maxsz / STR_INTVL;
+   int tag = pgnum >> N_ASSOC;
+   int setOffset = (pgnum & GENMASK(N_ASSOC - 1, 0));
+
+
+   ///
    return 0;
 }
 
@@ -45,6 +84,7 @@ int tlb_cache_read(struct memphy_struct * mp, int pid, int pgnum, BYTE value)
  *  @pgnum: page number
  *  @value: obtained value
  */
+//equivalent of pg_setpage
 int tlb_cache_write(struct memphy_struct *mp, int pid, int pgnum, BYTE value)
 {
    /* TODO: the identify info is mapped to 
@@ -53,6 +93,8 @@ int tlb_cache_write(struct memphy_struct *mp, int pid, int pgnum, BYTE value)
     */
    return 0;
 }
+
+#pragma region UNUSED
 
 /*
  *  TLBMEMPHY_read natively supports MEMPHY device interfaces
@@ -94,12 +136,18 @@ int TLBMEMPHY_write(struct memphy_struct * mp, int addr, BYTE data)
  *  @mp: memphy struct
  */
 
+#pragma endregion
 
 int TLBMEMPHY_dump(struct memphy_struct * mp)
 {
    /*TODO dump memphy contnt mp->storage 
     *     for tracing the memory content
     */
+   int i;
+	for (i = 0; i < mp->maxsz; i++) {
+      printf("%02x ", mp->storage[i]);
+	}
+   ///
 
    return 0;
 }
