@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/os",
-            "args": ["sched_0"],
+            "args": ["sched"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
