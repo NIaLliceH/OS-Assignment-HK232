@@ -1,3 +1,4 @@
+//#ifdef MM_PAGING
 /*
  * PAGING based Memory Management
  * Memory management unit mm/mm.c
@@ -7,7 +8,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#ifdef MM_PAGING
 /* 
  * init_pte - Initialize PTE entry
  */
@@ -125,14 +125,45 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
   int pgit, fpn;
   //struct framephy_struct *newfp_str;
 
-  for(pgit = 0; pgit < req_pgnum; pgit++)
+struct framephy_struct *newfp_str = NULL;
+
+  for (pgit = 0; pgit < req_pgnum; pgit++)
   {
-    if(MEMPHY_get_freefp(caller->mram, &fpn) == 0)
-   {
-     
-   } else {  // ERROR CODE of obtaining somes but not enough frames
-   } 
- }
+    newfp_str = (struct framephy_struct *)malloc(sizeof(struct framephy_struct));
+    if (MEMPHY_get_freefp(caller->mram, &fpn) == 0)
+    {
+      newfp_str->fpn = fpn;
+    }
+    else
+    { // ERROR CODE of obtaining somes but not enough frames
+      int vicpgn, swpfpn;
+      if (find_victim_page(caller->mm, &vicpgn) == -1 || MEMPHY_get_freefp(caller->active_mswp, &swpfpn) == -1)
+      {
+        if (*frm_lst == NULL)
+        {
+          return -1;
+        }
+        else
+        {
+          struct framephy_struct *freefp_str;
+          while (*frm_lst != NULL)
+          {
+            freefp_str = *frm_lst;
+            *frm_lst = (*frm_lst)->fp_next;
+            free(freefp_str);
+          }
+          return -3000;
+        }
+      }
+      uint32_t vicpte = caller->mm->pgd[vicpgn];
+      int vicfpn = PAGING_FPN(vicpte);
+      __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, swpfpn);
+      pte_set_swap(&caller->mm->pgd[vicpgn], 0, swpfpn);
+      newfp_str->fpn = vicfpn;
+    }
+    newfp_str->fp_next = *frm_lst;
+    *frm_lst = newfp_str;
+  }
 
   return 0;
 }
@@ -349,4 +380,4 @@ int print_pgtbl(struct pcb_t *caller, uint32_t start, uint32_t end)
   return 0;
 }
 
-#endif
+//#endif
