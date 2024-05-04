@@ -116,10 +116,10 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   *alloc_addr = old_sbrk;
   
   /*enlist the unuse memory region */
-  if (size < inc_sz){
-    struct vm_rg_struct *rg = init_vm_rg(old_sbrk + size , old_sbrk + inc_sz);
-    enlist_vm_freerg_list(caller->mm, rg);
-  }
+  // if (size < inc_sz){
+  //   struct vm_rg_struct *rg = init_vm_rg(old_sbrk + size , old_sbrk + inc_sz);
+  //   enlist_vm_freerg_list(caller->mm, rg);
+  // }
 
   return 0;
 }
