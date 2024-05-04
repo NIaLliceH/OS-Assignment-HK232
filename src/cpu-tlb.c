@@ -43,7 +43,7 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 {
   int addr;
 
-  #ifdef IODUMP
+  #ifdef PAGETBL_DUMP
     printf("Before alloc TLB dump:\n");
     TLBMEMPHY_dump(proc->tlb);
     puts("");
@@ -53,22 +53,21 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
   if (__alloc(proc, 0, reg_index, size, &addr) != 0){
     return -1;
   }
-  
 
-  #ifdef IODUMP
+  #ifdef PAGETBL_DUMP
   struct vm_rg_struct *currg = get_symrg_byid(proc->mm, reg_index);
   struct vm_area_struct *cur_vma = get_vma_by_num(proc->mm, 0);
   if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
 	  return -1;
 
-    printf("TLB-Alloc: Region start: %d, Region end: %d\n", currg->rg_start, currg->rg_end);
+    printf("TLB-Alloc: Region start: %lu, Region end: %lu\n", currg->rg_start, currg->rg_end);
   #endif
 
   int pgn = PAGING_PGN(addr);
   int pgit = 0;
   int pgn_count = PAGING_PAGE_ALIGNSZ(size) / PAGING_PAGESZ;
   int frmnum = -1;
-  #ifdef IODUMP
+  #ifdef PAGETBL_DUMP
     printf("TLB-Alloc: Number of page to cache: %d\n",pgn_count);
   #endif
   /* TODO update TLB CACHED frame num of the new allocated page(s)*/
@@ -79,13 +78,13 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
       return -1;
 
     if (frmnum == -1){
-      #ifdef IODUMP
+      #ifdef PAGETBL_DUMP
         printf("TLB page fault!:\n");
       #endif
       return -1;
     }
 
-    #ifdef IODUMP
+    #ifdef PAGETBL_DUMP
       printf("TLB-Alloc: Caching PID: %d PAGE: %d FRAME: %d\n", proc->pid, pgn + pgit, frmnum);
     #endif
 
@@ -93,7 +92,7 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
       return -1;
   }
 
-  #ifdef IODUMP
+  #ifdef PAGETBL_DUMP
   printf("After alloc TLB dump:\n");
   TLBMEMPHY_dump(proc->tlb);
   puts("");
@@ -114,12 +113,8 @@ int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
   if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
 	  return -1;
 
-  //CPU address calculate
-  int addr = currg->rg_start;
-  int pgn =  PAGING_PGN(addr);
-
-  #ifdef IODUMP
-    printf("reg_index: %d  addr: %d  pgn: %d\n", reg_index, addr, pgn);
+  #ifdef PAGETBL_DUMP
+    printf("reg_index: %d\n", reg_index);
     printf("Before free TLB dump:\n");
     TLBMEMPHY_dump(proc->tlb);
     puts("");
@@ -127,14 +122,25 @@ int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
 
   /* TODO update TLB CACHED frame num of freed page(s)*/
   /* by using tlb_cache_read()/tlb_cache_write()*/
+    //CPU address calculate
+  int addr = currg->rg_start;
 
-  int result = tlb_cache_invalidate(proc->tlb, proc->pid, pgn);
+  int size = currg->rg_end - currg->rg_start + 1;
+  
+  int pgn = PAGING_PGN(addr);
+  int pgit = 0;
+  int pgn_count = PAGING_PAGE_ALIGNSZ(size) / PAGING_PAGESZ;
 
-  // __free(proc, 0, reg_index);
+  for (; pgit < pgn_count; ++pgit){
+    tlb_cache_invalidate(proc->tlb, proc->pid, pgn + pgit);
+    #ifdef PAGETBL_DUMP
+      printf("TLB-Free: Freeing PID: %d PAGE: %d\n", proc->pid, pgn + pgit);
+    #endif
+  }
+
   pgfree_data(proc, reg_index);
 
-  #ifdef IODUMP
-  printf("Found entry to invalidate: %d\n", result);
+  #ifdef PAGETBL_DUMP
   printf("After free TLB dump:\n");
   TLBMEMPHY_dump(proc->tlb);
   puts("");
@@ -174,7 +180,7 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   int hit = tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum);
   ///
 	
-#ifdef IODUMP
+#ifdef PAGETBL_DUMP
   printf("Hit: %d\n", hit);
   if (hit >= 0)
     printf("TLB hit at read region=%d offset=%d\n", 
@@ -204,6 +210,11 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   MEMPHY_read(proc->mram, phyaddr, &data);
 
   destination = (uint32_t) data;
+
+    #ifdef PAGETBL_DUMP
+      printf("TLB-Read: Caching PID: %d PAGE: %d FRAME: %d DATA: %d\n", proc->pid, pgn, frmnum, destination);
+    #endif
+  
   return 0;
 }
 
@@ -237,7 +248,7 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   int hit = tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum);
   ///
 
-#ifdef IODUMP
+#ifdef PAGETBL_DUMP
   printf("Hit: %d\n", hit);
   printf("TLB dump:\n");
   TLBMEMPHY_dump(proc->tlb);
@@ -268,6 +279,11 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   //Write from memphy
   int phyaddr = (frmnum << PAGING_ADDR_FPN_LOBIT) + off;
   MEMPHY_write(proc->mram, phyaddr, data);
+
+  #ifdef PAGETBL_DUMP
+    printf("TLB-Write: Caching PID: %d PAGE: %d FRAME: %d DATA: %d\n", proc->pid, pgn, frmnum, data);
+  #endif
+
   return 0;
 }
 
