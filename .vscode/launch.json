@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/os",
-            "args": ["sched"],
+            "args": ["os_0_mlq_paging"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
