@@ -511,7 +511,8 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
     pg = pg->pg_next;
   }
   *retpgn = pg->pgn;
-  prev->pg_next = NULL;
+  
+  if (prev) prev->pg_next = NULL;
   
   free(pg);
 
