@@ -43,21 +43,61 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 {
   int addr;
 
+  #ifdef IODUMP
+    printf("Before alloc TLB dump:\n");
+    TLBMEMPHY_dump(proc->tlb);
+    puts("");
+  #endif
+
   /* By default using vmaid = 0 */
   if (__alloc(proc, 0, reg_index, size, &addr) != 0){
     return -1;
   }
+  
+
+  #ifdef IODUMP
+  struct vm_rg_struct *currg = get_symrg_byid(proc->mm, reg_index);
+  struct vm_area_struct *cur_vma = get_vma_by_num(proc->mm, 0);
+  if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
+	  return -1;
+
+    printf("TLB-Alloc: Region start: %d, Region end: %d\n", currg->rg_start, currg->rg_end);
+  #endif
 
   int pgn = PAGING_PGN(addr);
+  int pgit = 0;
+  int pgn_count = PAGING_PAGE_ALIGNSZ(size) / PAGING_PAGESZ;
   int frmnum = -1;
-  if (pg_getpage(proc->mm, pgn, &frmnum, proc) != 0)
-    return -1;
-
+  #ifdef IODUMP
+    printf("TLB-Alloc: Number of page to cache: %d\n",pgn_count);
+  #endif
   /* TODO update TLB CACHED frame num of the new allocated page(s)*/
   /* by using tlb_cache_read()/tlb_cache_write()*/
+  for (; pgit < pgn_count; ++pgit){
 
-  if (tlb_cache_write(proc->tlb, proc->pid, pgn, frmnum) != 0)
-    return -1;
+    if (pg_getpage(proc->mm, pgn + pgit, &frmnum, proc) != 0)
+      return -1;
+
+    if (frmnum == -1){
+      #ifdef IODUMP
+        printf("TLB page fault!:\n");
+      #endif
+      return -1;
+    }
+
+    #ifdef IODUMP
+      printf("TLB-Alloc: Caching PID: %d PAGE: %d FRAME: %d\n", proc->pid, pgn + pgit, frmnum);
+    #endif
+
+    if (tlb_cache_write(proc->tlb, proc->pid, pgn + pgit, frmnum) != 0)
+      return -1;
+  }
+
+  #ifdef IODUMP
+  printf("After alloc TLB dump:\n");
+  TLBMEMPHY_dump(proc->tlb);
+  puts("");
+  #endif
 
   return 0;
 }
@@ -69,8 +109,6 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
  */
 int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
 {
-
-
   struct vm_rg_struct *currg = get_symrg_byid(proc->mm, reg_index);
   struct vm_area_struct *cur_vma = get_vma_by_num(proc->mm, 0);
   if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
@@ -80,12 +118,27 @@ int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
   int addr = currg->rg_start;
   int pgn =  PAGING_PGN(addr);
 
+  #ifdef IODUMP
+    printf("reg_index: %d  addr: %d  pgn: %d\n", reg_index, addr, pgn);
+    printf("Before free TLB dump:\n");
+    TLBMEMPHY_dump(proc->tlb);
+    puts("");
+  #endif
+
   /* TODO update TLB CACHED frame num of freed page(s)*/
   /* by using tlb_cache_read()/tlb_cache_write()*/
 
-  tlb_cache_invalidate(proc->tlb, proc->pid, pgn);
+  int result = tlb_cache_invalidate(proc->tlb, proc->pid, pgn);
 
-  __free(proc, 0, reg_index);
+  // __free(proc, 0, reg_index);
+  pgfree_data(proc, reg_index);
+
+  #ifdef IODUMP
+  printf("Found entry to invalidate: %d\n", result);
+  printf("After free TLB dump:\n");
+  TLBMEMPHY_dump(proc->tlb);
+  puts("");
+  #endif
 
   return 0;
 }
@@ -118,11 +171,12 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   int off = PAGING_OFFST(addr);
 
   //get frmnum
-  tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum);
+  int hit = tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum);
   ///
 	
 #ifdef IODUMP
-  if (frmnum >= 0)
+  printf("Hit: %d\n", hit);
+  if (hit >= 0)
     printf("TLB hit at read region=%d offset=%d\n", 
 	         source, offset);
   else 
@@ -180,11 +234,15 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   int off = PAGING_OFFST(addr);
 
   //get frmnum
-  tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum);
+  int hit = tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum);
   ///
 
 #ifdef IODUMP
-  if (frmnum >= 0)
+  printf("Hit: %d\n", hit);
+  printf("TLB dump:\n");
+  TLBMEMPHY_dump(proc->tlb);
+  puts("\n");
+  if (hit >= 0)
     printf("TLB hit at write region=%d offset=%d value=%d\n",
 	          destination, offset, data);
 	else

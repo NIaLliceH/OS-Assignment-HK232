@@ -103,6 +103,9 @@ int vmap_page_range(struct pcb_t *caller, // process call
   {
     fpit = frames;
     pte_set_fpn(&caller->mm->pgd[pgn + pgit], fpit->fpn);
+
+    printf("========PID: %d ADDR: %d --- PAGE: %d ----> FRAME: %d\n",caller->pid, addr, pgn + pgit, fpit->fpn);
+
     frames = frames->fp_next;
     free(fpit);
    /* Tracking for later page replacement activities (if needed)

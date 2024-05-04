@@ -23,6 +23,25 @@
 
 #define init_tlbcache(mp,sz,...) init_memphy(mp, sz, (1, ##__VA_ARGS__))
 
+#define TLB_DBG
+
+void print_entry(uint64_t entry){
+      printf("%01lld %05lld %05lld %05lld\n",
+      TLB_VALID(entry),
+      TLB_TAG(entry),
+      TLB_PID(entry),
+      TLB_FRMNUM(entry)
+   );
+}
+
+void set_TLB_entry(uint64_t *entry, int valid, int pgnum, int pid, int frmnum){
+   *entry = 0;
+   SET_TLB_VALID(*entry, valid);
+   SET_TLB_TAG(*entry, pgnum);
+   SET_TLB_PID(*entry, pid);
+   SET_TLB_FRMNUM(*entry, frmnum);
+}
+
 /*
  *  tlb_cache_read read TLB cache device
  *  @mp: memphy struct
@@ -30,7 +49,6 @@
  *  @pgnum: page number
  *  @value: obtained value
  */
-//equivalent of pg_getpage
 int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* value)
 {
    /* TODO: the identify info is mapped to 
@@ -65,13 +83,6 @@ int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* value)
  */
 //equivalent of pg_setpage
 
-void set_TLB_entry(uint64_t *entry, int valid, int pgnum, int pid, int frmnum){
-   *entry = 0;
-   SET_TLB_VALID(*entry, valid);
-   SET_TLB_TAG(*entry, pgnum);
-   SET_TLB_PID(*entry, pid);
-   SET_TLB_FRMNUM(*entry, frmnum);
-}
 
 int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
 {
@@ -91,7 +102,6 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
       && TLB_PID(*entry) == pid){
          //FOUND EXISTING ENTRY
          set_TLB_entry(entry, 1, pgnum, pid, value);
-         
          return 0;
       }
    }
@@ -125,20 +135,23 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
    uint64_t* storage = (uint64_t*)tlb->storage;
    int storageSz = tlb->maxsz / sizeof(uint64_t);
 
+   int found = -1;
    int index;
    for (index = 0; index < storageSz; index++){
       uint64_t *entry = &(storage[index]);
       if (TLB_VALID(*entry) && TLB_PID(*entry) == pid){
          //FOUND EXISTING ENTRY OF PID
-         if (pgnum < 0 || TLB_TAG(*entry) == pgnum)
+         if (pgnum < 0 || TLB_TAG(*entry) == pgnum){
             SET_TLB_VALID(*entry, 0);
+            found = 0;
+         }
       }
    }
 
-   return 0;
+   return found;
 }
 
-// #pragma region UNUSED
+#pragma region UNUSED
 
 // /*
 //  *  TLBMEMPHY_read natively supports MEMPHY device interfaces
@@ -180,16 +193,25 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
 //  *  @mp: memphy struct
 //  */
 
-// #pragma endregion
+#pragma endregion
 
-int TLBMEMPHY_dump(struct memphy_struct * mp)
+int TLBMEMPHY_dump(struct memphy_struct * tlb)
 {
    /*TODO dump memphy contnt mp->storage 
     *     for tracing the memory content
     */
+   uint64_t* storage = (uint64_t*)tlb->storage;
+   int storageSz = tlb->maxsz / sizeof(uint64_t);
    int i;
-	for (i = 0; i < mp->maxsz; i++) {
-      printf("%02x ", mp->storage[i]);
+
+   // sprintf(stdout, "%5s %5s %5s %5s\n", 
+   //    "Valid", "TAG", "PID", "FRMNUM");
+
+	for (i = 0; i < storageSz; i++) {
+      if (TLB_VALID(storage[i])){
+         print_entry(storage[i]);
+      }
+      // else break;
 	}
    ///
 
