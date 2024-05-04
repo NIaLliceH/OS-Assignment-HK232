@@ -152,7 +152,24 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
     return -1;
   }
 
-  
+  //INVALIDATE PAGES
+
+  // int addr = rgnode->rg_start;
+
+  // int size = rgnode->rg_end - rgnode->rg_start + 1;
+
+  // int pgn = PAGING_PGN(addr);
+  // int pgit = 0;
+  // int pgn_count = PAGING_PAGE_ALIGNSZ(size) / PAGING_PAGESZ;
+
+  // for (; pgit < pgn_count; pgit++){
+  //   #ifdef IODUMP
+  //     printf("Bombing page: %d\n", pgn + pgit);
+  //   #endif
+  //   caller->mm->pgd[pgn + pgit] = -1;
+  // }
+
+  //
 
   /*enlist the obsoleted memory region */
   enlist_vm_freerg_list(caller->mm, rgnode);
@@ -194,6 +211,13 @@ int pgfree_data(struct pcb_t *proc, uint32_t reg_index)
 int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 {
   uint32_t pte = mm->pgd[pgn];
+
+  // if (pte == -1){
+  //   #ifdef IODUMP
+  //     printf("pg_getpage: Accessing released page, pte = -1 = %u", pte);
+  //   #endif
+  //   return -1;
+  // }
  
   if (!PAGING_PAGE_PRESENT(pte))
   { /* Page is not online, make it actively living */
