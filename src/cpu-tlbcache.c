@@ -49,7 +49,7 @@ void set_TLB_entry(uint64_t *entry, int valid, int pgnum, int pid, int frmnum){
  *  @pgnum: page number
  *  @value: obtained value
  */
-int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* value)
+int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* frmnum)
 {
    /* TODO: the identify info is mapped to 
     *      cache line by employing:
@@ -65,13 +65,13 @@ int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* value)
       if (TLB_VALID(*entry) 
       && TLB_TAG(*entry) == pgnum 
       && TLB_PID(*entry) == pid){
-         *value = TLB_FRMNUM(*entry);
+         *frmnum = TLB_FRMNUM(*entry);
          return 0;
       }
    }
    
-   *value = -1;
-   return -1;
+   *frmnum = -1;
+   return 0;
 }
 
 /*
