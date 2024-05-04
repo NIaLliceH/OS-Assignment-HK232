@@ -132,7 +132,14 @@ int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
   int pgn_count = PAGING_PAGE_ALIGNSZ(size) / PAGING_PAGESZ;
 
   for (; pgit < pgn_count; ++pgit){
+    //Set the according frame on RAM as free
+    int frmnum = PAGING_FPN(proc->mm->pgd[pgn + pgit]);
+
+    MEMPHY_put_freefp(proc->mram, frmnum);
+
     tlb_cache_invalidate(proc->tlb, proc->pid, pgn + pgit);
+
+
     #ifdef TLB_DUMP
       printf("TLB-Free: Freeing PID: %d PAGE: %d\n", proc->pid, pgn + pgit);
     #endif
