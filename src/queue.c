@@ -35,6 +35,7 @@ int empty(struct queue_t *q)
 void enqueue(struct queue_t *q, struct pcb_t *proc)
 {
         /* TODO: put a new process to queue [q] */
+        // Find the correct position to insert the new process based on its priority
         // print_queue(q, 1);
         if (q == NULL)
         {
@@ -47,19 +48,16 @@ void enqueue(struct queue_t *q, struct pcb_t *proc)
                 perror("Queue is full\n"); // queue [q] is full, cannot put more process
                 exit(1);
         }
-        // [q] has empty slot and ready to add new process
         q->proc[q->size] = proc;
         q->size = q->size + 1;
-        // print_queue(q, 2);
 }
-
 struct pcb_t *dequeue(struct queue_t *q)
 {
         /* TODO: return a pcb whose prioprity is the highest
          * in the queue [q] and remember to remove it from q
          * */
 
-        if (q == NULL || q->size == 0)
+        if (empty(q))
         {
                 return NULL; // q is not initialized or q is empty, cannot remove process
         }

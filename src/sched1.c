@@ -1,18 +1,22 @@
-
+// sched.c
 #include "queue.h"
 #include "sched.h"
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
-
 static struct queue_t ready_queue;
 static struct queue_t run_queue;
 static pthread_mutex_t queue_lock;
 
 #ifdef MLQ_SCHED
 static struct queue_t mlq_ready_queue[MAX_PRIO];
-int slot[MAX_PRIO];
+static int space[MAX_PRIO]; // static : Can be used for all files
+
 #endif
+void check_size_ready_queue(int k)
+{
+	printf("Size of ready_queue[%d] = %d\n", k, mlq_ready_queue[k].size);
+}
 
 int queue_empty(void)
 {
@@ -31,15 +35,13 @@ void init_scheduler(void)
 	int i;
 
 	for (i = 0; i < MAX_PRIO; i++)
-	{
 		mlq_ready_queue[i].size = 0;
-		slot[i] = MAX_PRIO - i;
-	}
 #endif
 	ready_queue.size = 0;
 	run_queue.size = 0;
 	pthread_mutex_init(&queue_lock, NULL);
 }
+
 #ifdef MLQ_SCHED
 /*
  *  Stateful design for routine calling
@@ -47,70 +49,38 @@ void init_scheduler(void)
  *  We implement stateful here using transition technique
  *  State representation   prio = 0 .. MAX_PRIO, curr_slot = 0..(MAX_PRIO - prio)
  */
-void set_slot_for_queue()
-{
-	for (int i = 0; i < MAX_PRIO; i++)
-	{
-		slot[i] = MAX_PRIO - i;
-	}
-}
-int check_newproc(int i)
-{
-	for (int j = 0; j < i; j++)
-	{
-		if (empty(&mlq_ready_queue[j]) || slot[j] <= 0)
-		{
-			continue;
-		}
-		return j - 1;
-	}
-	return -999;
-}
-
 struct pcb_t *get_mlq_proc(void)
 {
 	struct pcb_t *proc = NULL;
 	/*TODO: get a process from PRIORITY [ready_queue].
-	Remember to use lock to protect the queue.*/
-	int check = 0;
-	int flag = 0;
-	for (int i = 0; i < MAX_PRIO; ++i)
-	{
-		pthread_mutex_lock(&queue_lock);
-		check = check_newproc(i);
-		if (check != -999)
-		{
-			i = check;
-			continue;
+	 * Remember to use lock to protect the queue.
+	 */
+	
+	static int currentPriority = 0; // Start with queue have the highest priority
+	static int currentSpace = MAX_PRIO; 
+	// space[currentPriority] = MAX_PRIO;
+	
+	pthread_mutex_lock(&queue_lock);
+	
+	if(queue_empty() == -1) { // Exist a mlq_queue that is not empty
+		if(currentSpace <= 0) {
+		// if(space[currentPriority] <= 0) {
+			currentPriority = (currentPriority + 1) % MAX_PRIO; // Move to the next queue
+			currentSpace = MAX_PRIO - currentPriority;
+			// space[currentPriority] = MAX_PRIO - currentPriority; 
 		}
-		if (empty(&mlq_ready_queue[i]))
-		{
-			if (flag == 1 && i == MAX_PRIO - 1)
-			{
-				flag = 0;
-				set_slot_for_queue();
-				i = -1;
-			}
-			pthread_mutex_unlock(&queue_lock);
-			continue;
+		while(empty(&mlq_ready_queue[currentPriority])) {
+			currentPriority = (currentPriority + 1) % MAX_PRIO; // Move to the next queue
+			currentSpace = MAX_PRIO - currentPriority;
+			// space[currentPriority] = MAX_PRIO - currentPriority;
 		}
-		if (slot[i] <= 0)
-		{
-			flag = 1;
-			if (i == MAX_PRIO - 1)
-			{
-				flag = 0;
-				set_slot_for_queue();
-				i = -1;
-			}
-			pthread_mutex_unlock(&queue_lock);
-			continue;
-		}
-		proc = dequeue(&mlq_ready_queue[i]);
-		slot[i]--;
-		pthread_mutex_unlock(&queue_lock);
-		break;
+		
+		proc = dequeue(&mlq_ready_queue[currentPriority]); // Get the process from mlq_queue
+		currentSpace = currentSpace - 1;
+		// space[currentPriority] = space[currentPriority] - 1;
 	}
+	
+	pthread_mutex_unlock(&queue_lock);
 	return proc;
 }
 
