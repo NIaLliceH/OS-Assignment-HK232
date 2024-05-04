@@ -144,6 +144,9 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
          if (pgnum < 0 || TLB_TAG(*entry) == pgnum){
             SET_TLB_VALID(*entry, 0);
             found = 0;
+            //Return if it's not the clear all entry operation
+            if (pgnum != -1) 
+               return 0;
          }
       }
    }

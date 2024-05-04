@@ -152,6 +152,23 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
     return -1;
   }
 
+  ///
+  int addr = rgnode->rg_start;
+
+  int size = rgnode->rg_end - rgnode->rg_start;
+  
+  int pgn = PAGING_PGN(addr);
+  int pgit = 0;
+  int pgn_count = PAGING_PAGE_ALIGNSZ(size) / PAGING_PAGESZ;
+
+  for (; pgit < pgn_count; ++pgit){
+    //Set the according frames on RAM as free
+    int frmnum = PAGING_FPN(caller->mm->pgd[pgn + pgit]);
+    MEMPHY_put_freefp(caller->mram, frmnum);
+  }
+  ///
+
+
   /*enlist the obsoleted memory region */
   enlist_vm_freerg_list(caller->mm, rgnode);
 
