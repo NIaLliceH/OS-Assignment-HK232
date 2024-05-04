@@ -177,12 +177,16 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   int off = PAGING_OFFST(addr);
 
   //get frmnum
-  int hit = tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum);
+  if (tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum) != 0){
+    return -1;
+  }
   ///
+
+  int hit = (frmnum != -1);
 	
 #ifdef IODUMP
   printf("Hit: %d\n", hit);
-  if (hit >= 0)
+  if (hit != 0)
     printf("TLB hit at read region=%d offset=%d\n", 
 	         source, offset);
   else 
@@ -213,12 +217,15 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   int phyaddr = (frmnum << PAGING_ADDR_FPN_LOBIT) + off;
   MEMPHY_read(proc->mram, phyaddr, &data);
 
-  destination = (uint32_t) data;
-  
   #ifdef IODUMP
-    printf("Read data: %d\n", data);
+    printf("Read data: %d Writing to: %d\n", data, destination);
   #endif
-  
+
+  //WRITE TO DESTINATION
+  if (tlbwrite(proc, data, destination, 0) != 0){
+    return -1;
+  }
+   
   return 0;
 }
 

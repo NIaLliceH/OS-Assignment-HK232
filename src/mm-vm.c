@@ -313,9 +313,10 @@ int pgread(
 		uint32_t destination) 
 {
   BYTE data;
-  int val = __read(proc, 0, source, offset, &data);
+  if (__read(proc, 0, source, offset, &data) != 0){
+    return -1;
+  }
 
-  destination = (uint32_t) data;
 #ifdef IODUMP
   printf("read region=%d offset=%d value=%d\n", source, offset, data);
 #ifdef PAGETBL_DUMP
@@ -324,7 +325,12 @@ int pgread(
   MEMPHY_dump(proc->mram);
 #endif
 
-  return val;
+  //WRITE BACK TO DESTINATION
+  if (pgwrite(proc, data, destination, 0) != 0){
+    return -1;
+  }
+
+  return 0;
 }
 
 /*__write - write a region memory
