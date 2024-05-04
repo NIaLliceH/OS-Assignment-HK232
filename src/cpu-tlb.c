@@ -203,6 +203,10 @@ int tlbread(struct pcb_t * proc, uint32_t source,
     /* TODO update TLB CACHED with frame num of recent accessing page(s)*/
     /* by using tlb_cache_read()/tlb_cache_write()*/
     tlb_cache_write(proc->tlb, proc->pid, pgn, frmnum);
+
+    #ifdef PAGETBL_DUMP
+      printf("TLB-Read: Caching PID: %d PAGE: %d FRAME: %d DATA: %d\n", proc->pid, pgn, frmnum, destination);
+    #endif
   }
 
   //Read from memphy
@@ -211,9 +215,6 @@ int tlbread(struct pcb_t * proc, uint32_t source,
 
   destination = (uint32_t) data;
 
-    #ifdef PAGETBL_DUMP
-      printf("TLB-Read: Caching PID: %d PAGE: %d FRAME: %d DATA: %d\n", proc->pid, pgn, frmnum, destination);
-    #endif
   
   return 0;
 }
@@ -274,15 +275,16 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
     /* TODO update TLB CACHED with frame num of recent accessing page(s)*/
     /* by using tlb_cache_read()/tlb_cache_write()*/
     tlb_cache_write(proc->tlb, proc->pid, pgn, frmnum);
+    #ifdef PAGETBL_DUMP
+      printf("TLB-Write: Caching PID: %d PAGE: %d FRAME: %d DATA: %d\n", proc->pid, pgn, frmnum, data);
+    #endif
   }
 
   //Write from memphy
   int phyaddr = (frmnum << PAGING_ADDR_FPN_LOBIT) + off;
   MEMPHY_write(proc->mram, phyaddr, data);
 
-  #ifdef PAGETBL_DUMP
-    printf("TLB-Write: Caching PID: %d PAGE: %d FRAME: %d DATA: %d\n", proc->pid, pgn, frmnum, data);
-  #endif
+
 
   return 0;
 }
