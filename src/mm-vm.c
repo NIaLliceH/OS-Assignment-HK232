@@ -84,7 +84,9 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   /*Allocate at the toproof */
   struct vm_rg_struct rgnode;
 
-  if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
+  int alignedSz = PAGING_PAGE_ALIGNSZ(size);
+
+  if (get_free_vmrg_area(caller, vmaid, alignedSz, &rgnode) == 0)
   {
     caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
     caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
@@ -98,16 +100,16 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   /*Attempt to increate limit to get space */
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
-  int inc_sz = PAGING_PAGE_ALIGNSZ(size);
+  
   //int inc_limit_ret
   int old_sbrk ;
 
   old_sbrk = cur_vma->sbrk;
 
   /* TODO INCREASE THE LIMIT
-   * inc_vma_limit(caller, vmaid, inc_sz)
+   * inc_vma_limit(caller, vmaid, alignedSz)
    */
-  inc_vma_limit(caller, vmaid, inc_sz);
+  inc_vma_limit(caller, vmaid, alignedSz);
 
   /*Successful increase limit */
   caller->mm->symrgtbl[rgid].rg_start = old_sbrk;
@@ -116,8 +118,8 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   *alloc_addr = old_sbrk;
   
   /*enlist the unuse memory region */
-  // if (size < inc_sz){
-  //   struct vm_rg_struct *rg = init_vm_rg(old_sbrk + size , old_sbrk + inc_sz);
+  // if (size < alignedSz){
+  //   struct vm_rg_struct *rg = init_vm_rg(old_sbrk + size , old_sbrk + alignedSz);
   //   enlist_vm_freerg_list(caller->mm, rg);
   // }
 
@@ -484,6 +486,7 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
   struct vm_rg_struct * newrg = malloc(sizeof(struct vm_rg_struct));
   int inc_amt = PAGING_PAGE_ALIGNSZ(inc_sz);
   int incnumpage =  inc_amt / PAGING_PAGESZ;
+  
   struct vm_rg_struct *area = get_vm_area_node_at_brk(caller, vmaid, inc_sz, inc_amt);
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 

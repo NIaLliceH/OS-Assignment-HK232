@@ -220,13 +220,8 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   MEMPHY_read(proc->mram, phyaddr, &data);
 
   #ifdef TLB_DUMP
-    printf("Read data: %d Writing to: %d\n", data, destination);
+    printf("Read data: %d: %d\n", data);
   #endif
-
-  //WRITE TO DESTINATION
-  if (tlbwrite(proc, data, destination, 0) != 0){
-    return -1;
-  }
    
   return 0;
 }
