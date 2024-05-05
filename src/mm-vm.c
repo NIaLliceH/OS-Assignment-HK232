@@ -155,47 +155,39 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
  */
 int __free(struct pcb_t *caller, int vmaid, int rgid)
 {
-  // pthread_mutex_lock(&mm_vc_lock);
-  
-  if(rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
+ struct vm_rg_struct *rgnode = (struct vm_rg_struct *)malloc(sizeof(struct vm_rg_struct));
+
+  if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
     return -1;
 
+  pthread_mutex_lock(&mmvm_lock);
   /* TODO: Manage the collect freed region to freerg_list */
-
-  /* get the vm_area_struct */
-  struct vm_area_struct *vma = get_vma_by_num(caller->mm, vmaid);
-  if (!vma) {
+  struct vm_rg_struct *temp = get_symrg_byid(caller->mm, rgid);
+  if (temp->rg_end == 0)
+  {
+    pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
-
-  /* get the vm_rg_struct from the region ID */
-  struct vm_rg_struct *rgnode = get_symrg_byid(caller->mm, rgid);
-  if (!rgnode) {
-    return -1;
-  }
-
-  ///
-  int addr = rgnode->rg_start;
-
-  int size = rgnode->rg_end - rgnode->rg_start;
+  int inc_sz = temp->rg_end - temp->rg_start;
+  int inc_amt = PAGING_PAGE_ALIGNSZ(inc_sz);
+  int incnumpage = inc_amt / PAGING_PAGESZ;
+  int pgn = PAGING_PGN(temp->rg_start);
   
-  int pgn = PAGING_PGN(addr);
-  int pgit = 0;
-  int pgn_count = PAGING_PAGE_ALIGNSZ(size) / PAGING_PAGESZ;
-
-  for (; pgit < pgn_count; ++pgit){
-    //Set the according frames on RAM as free
-    int frmnum = PAGING_FPN(caller->mm->pgd[pgn + pgit]);
-    MEMPHY_put_freefp(caller->mram, frmnum);
+  for (int i = 0; i < incnumpage; i++)
+  {
+    MEMPHY_put_freefp(caller->mram, caller->mm->pgd[pgn + i]);
+    SETBIT(caller->mm->pgd[pgn + i], PAGING_PTE_DIRTY_MASK);
   }
-  ///
 
-
+  rgnode->rg_start = temp->rg_start;
+  rgnode->rg_end = temp->rg_end;
+  rgnode->rg_next = NULL;
+  temp->rg_start = 0;
+  temp->rg_end = 0;
+  temp->rg_next = NULL;
   /*enlist the obsoleted memory region */
   enlist_vm_freerg_list(caller->mm, rgnode);
-
-  // pthread_mutex_unlock(&mm_vc_lock);
-
+  pthread_mutex_unlock(&mmvm_lock);
   return 0;
 }
 
