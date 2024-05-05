@@ -28,8 +28,8 @@
 void print_entry(uint64_t entry){
       printf("%01lld %05lld %05lld %05lld\n",
       TLB_VALID(entry),
-      TLB_TAG(entry),
       TLB_PID(entry),
+      TLB_TAG(entry),
       TLB_FRMNUM(entry)
    );
 }

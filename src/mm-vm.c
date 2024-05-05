@@ -86,7 +86,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   int alignedSz = PAGING_PAGE_ALIGNSZ(size);
 
-  if (get_free_vmrg_area(caller, vmaid, alignedSz, &rgnode) == 0)
+  if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
   {
     caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
     caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
@@ -118,10 +118,10 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   *alloc_addr = old_sbrk;
   
   /*enlist the unuse memory region */
-  // if (size < alignedSz){
-  //   struct vm_rg_struct *rg = init_vm_rg(old_sbrk + size , old_sbrk + alignedSz);
-  //   enlist_vm_freerg_list(caller->mm, rg);
-  // }
+  if (size < alignedSz){
+    struct vm_rg_struct *rg = init_vm_rg(old_sbrk + size , old_sbrk + alignedSz);
+    enlist_vm_freerg_list(caller->mm, rg);
+  }
 
   return 0;
 }

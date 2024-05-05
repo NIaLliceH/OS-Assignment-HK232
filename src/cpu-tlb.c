@@ -188,11 +188,9 @@ int tlbread(struct pcb_t * proc, uint32_t source,
 #ifdef TLB_DUMP
   printf("Hit: %d\n", hit);
   if (hit != 0)
-    printf("TLB hit at read region=%d offset=%d\n", 
-	         source, offset);
+    printf("TLB hit at read pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
   else 
-    printf("TLB miss at read region=%d offset=%d\n", 
-	         source, offset);
+    printf("TLB miss at read pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum); 
   MEMPHY_dump(proc->mram);
 #endif
 
@@ -261,12 +259,10 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   printf("TLB dump:\n");
   TLBMEMPHY_dump(proc->tlb);
   puts("\n");
-  if (hit >= 0)
-    printf("TLB hit at write region=%d offset=%d value=%d\n",
-	          destination, offset, data);
-	else
-    printf("TLB miss at write region=%d offset=%d value=%d\n",
-            destination, offset, data);
+  if (hit != 0)
+    printf("TLB hit at write pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
+  else 
+    printf("TLB miss at write pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum); 
   MEMPHY_dump(proc->mram);
 #endif
 #ifdef IODUMP
