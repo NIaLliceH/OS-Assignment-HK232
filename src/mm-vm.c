@@ -86,7 +86,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   pthread_mutex_unlock(&mmvm_lock);
   /*Allocate at the toproof */
 							  
-  struct vm_rg_struct rgnode;
+  // struct vm_rg_struct rgnode;
 
   // if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
   // {

@@ -125,11 +125,11 @@ static void *ld_routine(void *args)
 	struct memphy_struct** mswp = ((struct mmpaging_ld_args *)args)->mswp;
 	struct memphy_struct* active_mswp = ((struct mmpaging_ld_args *)args)->active_mswp;
 	struct timer_id_t * timer_id = ((struct mmpaging_ld_args *)args)->timer_id;
-#ifdef CPU_TLB
-	struct memphy_struct* tlb = ((struct mmpaging_ld_args *)args)->tlb;
-#endif
 #else
 	struct timer_id_t *timer_id = (struct timer_id_t *)args;
+#endif
+#ifdef CPU_TLB
+	struct memphy_struct* tlb = ((struct mmpaging_ld_args *)args)->tlb;
 #endif
 
 
