@@ -18,6 +18,11 @@
 #ifdef CPU_TLB
 #include "cpu-tlbcache.h"
 
+#include <pthread.h>
+///LOCKS
+static pthread_mutex_t tlb_lock;
+///
+
 int tlb_change_all_page_tables_of(struct pcb_t *proc,  struct memphy_struct * mp)
 {
   /* TODO update all page table directory info 
@@ -187,18 +192,18 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   }
   ///
 
-  int hit = (frmnum != -1);
-	
 #ifdef TLB_DUMP
-  printf("Hit: %d\n", hit);
-  if (hit != 0)
+  printf("TLB dump:\n");
+  TLBMEMPHY_dump(proc->tlb);
+  puts("\n");
+  if (frmnum >= 0)
   {
     printf("TLB hit at read pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
     printf("read region=%d offset=%d\n", source, offset); 
   }
   else 
   { 
-    printf("TLB hit at read pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
+    printf("TLB miss at read pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
     printf("read region=%d offset=%d\n", source, offset); 
   }
   MEMPHY_dump(proc->mram);
@@ -228,7 +233,7 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   MEMPHY_read(proc->mram, phyaddr, &data);
 
   #ifdef TLB_DUMP
-    printf("Read data: %d: %d\n", data);
+    printf("Read data: %d\n", data);
   #endif
    
   return 0;
@@ -262,23 +267,25 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   int off = PAGING_OFFST(addr);
 
   //get frmnum
-  int hit = tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum);
+  if (tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum) != 0){
+    return -1;
+  }
   ///
 
 #ifdef TLB_DUMP
-  printf("Hit: %d\n", hit);
+  printf("Hit: %d\n", frmnum >= 0);
   printf("TLB dump:\n");
   TLBMEMPHY_dump(proc->tlb);
   puts("\n");
-  if (hit != 0)
+  if (frmnum >= 0)
   {
     printf("TLB hit at write pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
-    printf("write region=%d offset=%d\n", destination, offset); 
+    printf("write region=%d offset=%d data=%d\n", destination, offset, data); 
   }
   else 
   { 
-    printf("TLB hit at write pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
-    printf("write region=%d offset=%d\n", destination, offset); 
+    printf("TLB miss at write pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
+    printf("write region=%d offset=%d data=%d\n", destination, offset, data); 
   }
   MEMPHY_dump(proc->mram);
 #endif

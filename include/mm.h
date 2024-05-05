@@ -171,9 +171,4 @@ int print_pgtbl(struct pcb_t *ip, uint32_t start, uint32_t end);
 
 int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller);
 
-#include <pthread.h>
-///LOCKS
-static pthread_mutex_t mm_vc_lock;
-///
-
 #endif
