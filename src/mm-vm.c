@@ -7,6 +7,9 @@
 #include "mm.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <pthread.h>
+
+static pthread_mutex_t mmlock = PTHREAD_MUTEX_INITIALIZER;
 
 #ifdef MM_PAGING
 /*enlist_vm_freerg_list - add new rg to freerg_list
@@ -84,15 +87,15 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   /*Allocate at the toproof */
   struct vm_rg_struct rgnode;
 
-  if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
-  {
-    caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
-    caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
+  // if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
+  // {
+  //   caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
+  //   caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
 
-    *alloc_addr = rgnode.rg_start;
+  //   *alloc_addr = rgnode.rg_start;
 
-    return 0;
-  }
+  //   return 0;
+  // }
 
   /* TODO get_free_vmrg_area FAILED handle the region management (Fig.6)*/
 
@@ -281,7 +284,26 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
 
    return 0;
 }
+int check_if_in_freerg_list(struct pcb_t *caller, int vmaid, struct vm_rg_struct *currg) {
+  struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
+  struct vm_rg_struct *rgit = cur_vma->vm_freerg_list;
+
+  if (rgit == NULL)
+    return 1;
+
+  /* Traverse on list of free vm region to find a fit space */
+  while (rgit != NULL)
+  {
+    //printf("[Debug] %ld %ld %ld %ld\n", rgit->rg_start, rgit->rg_end, currg->rg_start, currg->rg_end);
+    if (rgit->rg_start == currg->rg_start && rgit->rg_end == currg->rg_end)
+    {
+      return -1;
+    }
+    rgit = rgit->rg_next;	// Traverse next rg
+  }
+  return 1;
+}
 /*__read - read value in region memory
  *@caller: caller
  *@vmaid: ID vm area to alloc memory region
@@ -292,15 +314,24 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
  */
 int __read(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE *data)
 {
+  pthread_mutex_lock(&mmlock);
   struct vm_rg_struct *currg = get_symrg_byid(caller->mm, rgid);
 
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
-  if( currg -> rg_start >= currg -> rg_end || currg == NULL || cur_vma == NULL) /* Invalid memory identify */
+  if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
+  {
+    pthread_mutex_unlock(&mmlock);
 	  return -1;
+  }
 
+  if (check_if_in_freerg_list(caller, vmaid, currg) == -1) {
+    printf("Read in freed area.\n");
+    pthread_mutex_unlock(&mmlock);
+	  return -1;
+  }
   pg_getval(caller->mm, currg->rg_start + offset, data, caller);
-
+  pthread_mutex_unlock(&mmlock);
   return 0;
 }
 
@@ -337,16 +368,23 @@ int pgread(
  */
 int __write(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE value)
 {
+  pthread_mutex_lock(&mmlock);
   struct vm_rg_struct *currg = get_symrg_byid(caller->mm, rgid);
 
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
   
   if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
+  {
+    pthread_mutex_unlock(&mmlock);
 	  return -1;
-  if (currg->rg_start + offset >  currg->rg_end) 
-          return -1; //invalid access
+  }
+  if (check_if_in_freerg_list(caller, vmaid, currg) == -1) {
+    printf("Write in freed area.\n");
+    pthread_mutex_unlock(&mmlock);
+	  return -1;
+  }
   pg_setval(caller->mm, currg->rg_start + offset, value, caller);
-
+  pthread_mutex_unlock(&mmlock);
   return 0;
 }
 

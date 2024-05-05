@@ -54,11 +54,16 @@ int run(struct pcb_t * proc) {
 	struct inst_t ins = proc->code->text[proc->pc];
 	proc->pc++;
 	int stat = 1;
+	printf("--INSTRUTIONS START--\n");
+	printf("PID = %08d, ", proc->pid);
+
 	switch (ins.opcode) {
 	case CALC:
+		printf("Instructions: CALC\n");
 		stat = calc(proc);
 		break;
 	case ALLOC:
+		printf("Instructions: ALLOC %d %d\n",ins.arg_0,ins.arg_1);
 #ifdef CPU_TLB 
 		stat = tlballoc(proc, ins.arg_0, ins.arg_1);
 #elif defined(MM_PAGING)
@@ -68,6 +73,7 @@ int run(struct pcb_t * proc) {
 #endif
 		break;
 	case FREE:
+		printf("Instructions: FREE %d\n", ins.arg_0);
 #ifdef CPU_TLB
 		stat = tlbfree_data(proc, ins.arg_0);
 #elif defined(MM_PAGING)
@@ -77,6 +83,7 @@ int run(struct pcb_t * proc) {
 #endif
 		break;
 	case READ:
+		printf("Instructions: READ %d %d %d\n", ins.arg_0, ins.arg_1, ins.arg_2);
 #ifdef CPU_TLB
 		stat = tlbread(proc, ins.arg_0, ins.arg_1, ins.arg_2);
 #elif defined(MM_PAGING)
@@ -86,6 +93,7 @@ int run(struct pcb_t * proc) {
 #endif
 		break;
 	case WRITE:
+		printf("Instructions: WRITE %d %d %d\n", ins.arg_0, ins.arg_1, ins.arg_2);
 #ifdef CPU_TLB
 		stat = tlbwrite(proc, ins.arg_0, ins.arg_1, ins.arg_2);
 #elif defined(MM_PAGING)
@@ -97,6 +105,7 @@ int run(struct pcb_t * proc) {
 	default:
 		stat = 1;
 	}
+	printf("--INSTRUCTIONS END--\n");
 	return stat;
 
 }
