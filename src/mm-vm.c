@@ -16,6 +16,7 @@ static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
  *@rg_elmt: new region
  *
  */
+
 int enlist_vm_freerg_list(struct mm_struct *mm, struct vm_rg_struct *rg_elmt)
 {
   struct vm_rg_struct *rg_node = mm->mmap->vm_freerg_list;
@@ -83,6 +84,7 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  */
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr)
 {
+
   pthread_mutex_unlock(&mmvm_lock);
   /*Allocate at the toproof */
 							  
@@ -120,13 +122,13 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   old_sbrk = cur_vma->sbrk;
 
   /* TODO INCREASE THE LIMIT
-   * inc_vma_limit(caller, vmaid, inc_sz)
+   * inc_vma_limit(caller, vmaid, alignedSz)
    */
-  inc_vma_limit(caller, vmaid, inc_sz);
+  inc_vma_limit(caller, vmaid, alignedSz);
 
   /*Successful increase limit */
   caller->mm->symrgtbl[rgid].rg_start = old_sbrk;
-  caller->mm->symrgtbl[rgid].rg_end = old_sbrk + size;
+  caller->mm->symrgtbl[rgid].rg_end = old_sbrk + alignedSz;
 
   *alloc_addr = old_sbrk;
 
@@ -492,6 +494,7 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
   struct vm_rg_struct * newrg = malloc(sizeof(struct vm_rg_struct));
   int inc_amt = PAGING_PAGE_ALIGNSZ(inc_sz);
   int incnumpage =  inc_amt / PAGING_PAGESZ;
+  
   struct vm_rg_struct *area = get_vm_area_node_at_brk(caller, vmaid, inc_sz, inc_amt);
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
 
