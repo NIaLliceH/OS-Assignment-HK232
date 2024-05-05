@@ -120,6 +120,8 @@ int __read(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE *data);
 int __write(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE value);
 int init_mm(struct mm_struct *mm, struct pcb_t *caller);
 
+typedef uint64_t TLB_entry_t;
+
 /* CPUTLB prototypes */
 int tlb_change_all_page_tables_of(struct pcb_t *proc,  struct memphy_struct * mp);
 int tlb_flush_tlb_of(struct pcb_t *proc, struct memphy_struct * mp);
@@ -128,8 +130,8 @@ int tlbfree_data(struct pcb_t *proc, uint32_t reg_index);
 int tlbread(struct pcb_t * proc, uint32_t source, uint32_t offset, uint32_t destination) ;
 int tlbwrite(struct pcb_t * proc, BYTE data, uint32_t destination, uint32_t offset);
 int init_tlbmemphy(struct memphy_struct *mp, int max_size);
-int TLBMEMPHY_read(struct memphy_struct * mp, int addr, BYTE *value);
-int TLBMEMPHY_write(struct memphy_struct * mp, int addr, BYTE data);
+int TLBMEMPHY_read(struct memphy_struct * mp, int addr, TLB_entry_t *value);
+int TLBMEMPHY_write(struct memphy_struct * mp, int addr, TLB_entry_t data);
 int TLBMEMPHY_dump(struct memphy_struct * mp);
 
 /* VM prototypes */
