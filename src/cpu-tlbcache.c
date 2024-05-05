@@ -158,7 +158,7 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
    return found;
 }
 
-#pragma region UNUSED
+// #pragma region UNUSED
 
 // /*
 //  *  TLBMEMPHY_read natively supports MEMPHY device interfaces
@@ -200,7 +200,7 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
 //  *  @mp: memphy struct
 //  */
 
-#pragma endregion
+// #pragma endregion
 
 int TLBMEMPHY_dump(struct memphy_struct * tlb)
 {

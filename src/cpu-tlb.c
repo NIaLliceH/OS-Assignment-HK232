@@ -182,6 +182,7 @@ int tlbread(struct pcb_t * proc, uint32_t source,
 	  return -1;
 
   //CPU address calculate
+  // int addr = currg->rg_start + offset;
   int addr = currg->rg_start + offset;
   int pgn = PAGING_PGN(addr);
   int off = PAGING_OFFST(addr);
@@ -216,9 +217,12 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   if (frmnum < 0)
   {
     //TLB MISS, GET DATA THROUGH PAGE TABLE
-    if (pg_getpage(proc->mm, pgn, &frmnum, proc) != 0)
+    if (pg_getpage(proc->mm, pgn, &frmnum, proc) != 0 || frmnum < 0){
+      #ifdef IODUMP
+        printf("Page fault!!!\n");
+      #endif
       return -1;
-
+    }
     /* TODO update TLB CACHED with frame num of recent accessing page(s)*/
     /* by using tlb_cache_read()/tlb_cache_write()*/
     tlb_cache_write(proc->tlb, proc->pid, pgn, frmnum);
@@ -296,8 +300,12 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   if (frmnum < 0)
   {
     //TLB MISS, GET DATA THROUGH PAGE TABLE
-    if (pg_getpage(proc->mm, pgn, &frmnum, proc) != 0)
+    if (pg_getpage(proc->mm, pgn, &frmnum, proc) != 0 || frmnum < 0){
+      #ifdef IODUMP
+        printf("Page fault!!!\n");
+      #endif
       return -1;
+    }
 
     /* TODO update TLB CACHED with frame num of recent accessing page(s)*/
     /* by using tlb_cache_read()/tlb_cache_write()*/
