@@ -7,6 +7,8 @@
 #include "mm.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <pthread.h>
+static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
 
 #ifdef MM_PAGING
 /*enlist_vm_freerg_list - add new rg to freerg_list
@@ -82,29 +84,40 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  */
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr)
 {
-  // pthread_mutex_lock(&mm_vc_lock);
+
+  pthread_mutex_unlock(&mmvm_lock);
   /*Allocate at the toproof */
+							  
   struct vm_rg_struct rgnode;
 
-  int alignedSz = PAGING_PAGE_ALIGNSZ(size);
+  // if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
+  // {
+  //   caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
+  //   caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
 
-  if (get_free_vmrg_area(caller, vmaid, alignedSz, &rgnode) == 0)
-  {
-    caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
-    caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
+  //   struct vm_rg_struct *newrg = malloc(sizeof(struct vm_rg_struct));
+  //   int inc_sz = rgnode.rg_end - rgnode.rg_start;
+  //   int inc_amt = PAGING_PAGE_ALIGNSZ(inc_sz);
+  //   int incnumpage = inc_amt / PAGING_PAGESZ;
 
-    *alloc_addr = rgnode.rg_start;
+  //   if (vm_map_ram(caller, rgnode.rg_start, rgnode.rg_end, rgnode.rg_start, incnumpage, newrg) < 0)
+  //   {
+  //     pthread_mutex_unlock(&mmvm_lock);
+  //     return -1;
+  //   }
 
-    return 0;
-  }
+  //   *alloc_addr = rgnode.rg_start;
+	// 	pthread_mutex_unlock(&mmvm_lock);
+  //   return 0;
+  // }
 
   /* TODO get_free_vmrg_area FAILED handle the region management (Fig.6)*/
 
   /*Attempt to increate limit to get space */
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
-  
-  //int inc_limit_ret
-  int old_sbrk ;
+  int inc_sz = PAGING_PAGE_ALIGNSZ(size);
+  // int inc_limit_ret
+  int old_sbrk;
 
   old_sbrk = cur_vma->sbrk;
 
@@ -118,13 +131,18 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   caller->mm->symrgtbl[rgid].rg_end = old_sbrk + alignedSz;
 
   *alloc_addr = old_sbrk;
-  
-  /*enlist the unuse memory region */
-  // if (size < alignedSz){
-  //   struct vm_rg_struct *rg = init_vm_rg(old_sbrk + size , old_sbrk + alignedSz);
-  //   enlist_vm_freerg_list(caller->mm, rg);
-  // }
-  // pthread_mutex_unlock(&mm_vc_lock);
+
+  struct vm_area_struct *remain_rg = get_vma_by_num(caller->mm, vmaid);
+  if (old_sbrk + size < remain_rg->sbrk)
+  {
+    struct vm_rg_struct *rg_free = malloc(sizeof(struct vm_rg_struct));
+    rg_free->rg_start = old_sbrk + size;
+    rg_free->rg_end = remain_rg->sbrk;
+    enlist_vm_freerg_list(caller->mm, rg_free);
+  }
+
+  pthread_mutex_unlock(&mmvm_lock);
+
   return 0;
 }
 
@@ -334,19 +352,18 @@ int pgread(
 		uint32_t destination) 
 {
   BYTE data;
-  if (__read(proc, 0, source, offset, &data) != 0){
-    return -1;
-  }
+  int val = __read(proc, 0, source, offset, &data);
 
+  destination = (uint32_t) data;
 #ifdef IODUMP
   printf("read region=%d offset=%d value=%d\n", source, offset, data);
 #ifdef PAGETBL_DUMP
-  print_pgtbl(proc, 0, -1); //print max TBL
+  print_pgtbl(proc, 0, -1); //print max TLB
 #endif
   MEMPHY_dump(proc->mram);
 #endif
 
-  return 0;
+  return val;
 }
 
 /*__write - write a region memory
