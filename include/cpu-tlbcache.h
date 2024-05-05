@@ -3,6 +3,11 @@
 
 #include "mm.h"
 
+#include <pthread.h>
+///LOCKS
+static pthread_mutex_t tlb_lock;
+///
+
 // Forward declarations for functions
 int tlb_cache_read(struct memphy_struct *tlb, int pid, int pgnum, int* value);
 int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value);

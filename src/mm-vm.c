@@ -14,6 +14,7 @@
  *@rg_elmt: new region
  *
  */
+
 int enlist_vm_freerg_list(struct mm_struct *mm, struct vm_rg_struct *rg_elmt)
 {
   struct vm_rg_struct *rg_node = mm->mmap->vm_freerg_list;
@@ -81,12 +82,13 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  */
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr)
 {
+  // pthread_mutex_lock(&mm_vc_lock);
   /*Allocate at the toproof */
   struct vm_rg_struct rgnode;
 
   int alignedSz = PAGING_PAGE_ALIGNSZ(size);
 
-  if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
+  if (get_free_vmrg_area(caller, vmaid, alignedSz, &rgnode) == 0)
   {
     caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
     caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
@@ -113,16 +115,16 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   /*Successful increase limit */
   caller->mm->symrgtbl[rgid].rg_start = old_sbrk;
-  caller->mm->symrgtbl[rgid].rg_end = old_sbrk + size;
+  caller->mm->symrgtbl[rgid].rg_end = old_sbrk + alignedSz;
 
   *alloc_addr = old_sbrk;
   
   /*enlist the unuse memory region */
-  if (size < alignedSz){
-    struct vm_rg_struct *rg = init_vm_rg(old_sbrk + size , old_sbrk + alignedSz);
-    enlist_vm_freerg_list(caller->mm, rg);
-  }
-
+  // if (size < alignedSz){
+  //   struct vm_rg_struct *rg = init_vm_rg(old_sbrk + size , old_sbrk + alignedSz);
+  //   enlist_vm_freerg_list(caller->mm, rg);
+  // }
+  // pthread_mutex_unlock(&mm_vc_lock);
   return 0;
 }
 
@@ -135,8 +137,8 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
  */
 int __free(struct pcb_t *caller, int vmaid, int rgid)
 {
-  //struct vm_rg_struct rgnode;
-
+  // pthread_mutex_lock(&mm_vc_lock);
+  
   if(rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
     return -1;
 
@@ -173,6 +175,8 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
 
   /*enlist the obsoleted memory region */
   enlist_vm_freerg_list(caller->mm, rgnode);
+
+  // pthread_mutex_unlock(&mm_vc_lock);
 
   return 0;
 }
@@ -341,11 +345,6 @@ int pgread(
 #endif
   MEMPHY_dump(proc->mram);
 #endif
-
-  //WRITE BACK TO DESTINATION
-  if (pgwrite(proc, data, destination, 0) != 0){
-    return -1;
-  }
 
   return 0;
 }

@@ -169,8 +169,11 @@ int print_list_vma(struct vm_area_struct *rg);
 int print_list_pgn(struct pgn_t *ip);
 int print_pgtbl(struct pcb_t *ip, uint32_t start, uint32_t end);
 
-//SHOULD THIS BE HERE?
 int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller);
 
-#endif
+#include <pthread.h>
+///LOCKS
+static pthread_mutex_t mm_vc_lock;
+///
 
+#endif

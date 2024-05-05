@@ -41,6 +41,7 @@ int tlb_flush_tlb_of(struct pcb_t *proc, struct memphy_struct * mp)
  */
 int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 {
+  pthread_mutex_lock(&tlb_lock);
   int addr;
 
   #ifdef TLB_DUMP
@@ -97,7 +98,7 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
   TLBMEMPHY_dump(proc->tlb);
   puts("");
   #endif
-
+  pthread_mutex_unlock(&tlb_lock);
   return 0;
 }
 
@@ -108,6 +109,7 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
  */
 int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
 {
+  pthread_mutex_lock(&tlb_lock);
   struct vm_rg_struct *currg = get_symrg_byid(proc->mm, reg_index);
   struct vm_area_struct *cur_vma = get_vma_by_num(proc->mm, 0);
   if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
@@ -146,6 +148,8 @@ int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
   TLBMEMPHY_dump(proc->tlb);
   puts("");
   #endif
+
+  pthread_mutex_unlock(&tlb_lock);
 
   return 0;
 }
@@ -188,9 +192,15 @@ int tlbread(struct pcb_t * proc, uint32_t source,
 #ifdef TLB_DUMP
   printf("Hit: %d\n", hit);
   if (hit != 0)
+  {
     printf("TLB hit at read pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
+    printf("read region=%d offset=%d\n", source, offset); 
+  }
   else 
-    printf("TLB miss at read pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum); 
+  { 
+    printf("TLB hit at read pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
+    printf("read region=%d offset=%d\n", source, offset); 
+  }
   MEMPHY_dump(proc->mram);
 #endif
 
@@ -233,6 +243,7 @@ int tlbread(struct pcb_t * proc, uint32_t source,
 int tlbwrite(struct pcb_t * proc, BYTE data,
              uint32_t destination, uint32_t offset)
 {
+  pthread_mutex_lock(&tlb_lock);
   int frmnum = -1;
 
   /* TODO retrieve TLB CACHED frame num of accessing page(s))*/
@@ -260,9 +271,15 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   TLBMEMPHY_dump(proc->tlb);
   puts("\n");
   if (hit != 0)
+  {
     printf("TLB hit at write pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
+    printf("write region=%d offset=%d\n", destination, offset); 
+  }
   else 
-    printf("TLB miss at write pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum); 
+  { 
+    printf("TLB hit at write pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
+    printf("write region=%d offset=%d\n", destination, offset); 
+  }
   MEMPHY_dump(proc->mram);
 #endif
 #ifdef IODUMP
@@ -287,8 +304,7 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   int phyaddr = (frmnum << PAGING_ADDR_FPN_LOBIT) + off;
   MEMPHY_write(proc->mram, phyaddr, data);
 
-
-
+  pthread_mutex_unlock(&tlb_lock);
   return 0;
 }
 
