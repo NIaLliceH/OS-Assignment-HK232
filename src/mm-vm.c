@@ -246,7 +246,13 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 {
   uint32_t pte = mm->pgd[pgn];
 
+  *fpn = -1;
+
+  //Page not allocated
   if (!PAGING_PAGE_PRESENT(pte))
+    return -1;
+
+  if (pte & PAGING_PTE_SWAPPED_MASK)
   { /* Page is not online, make it actively living */
     int vicpgn, swpfpn;
     int vicfpn;
@@ -568,12 +574,12 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
   struct pgn_t *pg = mm->fifo_pgn;
 
   /* TODO: Implement the theorical mechanism to find the victim page */
- if (!pg)
+  if (!pg)
   {
     return -1;
   }
   struct pgn_t *prev = NULL;
-  while (pg->pg_next)
+  while (pg->pg_next || mm->pgd[pg->pgn] & PAGING_PTE_SWAPPED_MASK)
   {
     prev = pg;
     pg = pg->pg_next;
