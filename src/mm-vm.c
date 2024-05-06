@@ -195,7 +195,7 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
     int fpn;
     if (pg_getpage(caller->mm, pgn + i, &fpn, caller) != 0) return -1;
     MEMPHY_put_freefp(caller->mram, fpn);
-    SETBIT(caller->mm->pgd[pgn + i], PAGING_PTE_DIRTY_MASK);
+    CLRBIT(caller->mm->pgd[pgn + i], PAGING_PTE_PRESENT_MASK);
     clear_pgn_node(caller, pgn+i);
   }
 

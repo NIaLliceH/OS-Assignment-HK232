@@ -47,6 +47,11 @@ int tlb_flush_tlb_of(struct pcb_t *proc, struct memphy_struct * mp)
 int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 {
   pthread_mutex_lock(&tlb_lock);
+
+  #ifdef TLB_DUMP
+    printf("----- TLB ALLOC ----- PID: %d PC: %d-----\n", proc->pid, proc->pc);
+  #endif
+
   int addr;
 
   #ifdef TLB_DUMP
@@ -112,6 +117,12 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
   TLBMEMPHY_dump(proc->tlb);
   puts("");
   #endif
+
+  #ifdef IODUMP
+    print_pgtbl(proc, 0, -1); //print max TBL
+    MEMPHY_dump(proc->mram);
+  #endif
+
   pthread_mutex_unlock(&tlb_lock);
   return 0;
 }
@@ -124,6 +135,9 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
 {
   pthread_mutex_lock(&tlb_lock);
+  #ifdef TLB_DUMP
+    printf("----- TLB FREE ----- PID: %d PC: %d-----\n", proc->pid, proc->pc);
+  #endif
   struct vm_rg_struct *currg = get_symrg_byid(proc->mm, reg_index);
   struct vm_area_struct *cur_vma = get_vma_by_num(proc->mm, 0);
   if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
@@ -163,6 +177,11 @@ int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
   puts("");
   #endif
 
+  #ifdef IODUMP
+    print_pgtbl(proc, 0, -1); //print max TBL
+    MEMPHY_dump(proc->mram);
+  #endif
+
   pthread_mutex_unlock(&tlb_lock);
 
   return 0;
@@ -178,6 +197,9 @@ int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
 int tlbread(struct pcb_t * proc, uint32_t source,
             uint32_t offset, 	uint32_t destination) 
 {
+  #ifdef TLB_DUMP
+    printf("----- TLB READ ----- PID: %d PC: %d-----\n", proc->pid, proc->pc);
+  #endif
   BYTE data;
   int frmnum = -1;
   /* TODO retrieve TLB CACHED frame num of accessing page(s)*/
@@ -191,7 +213,6 @@ int tlbread(struct pcb_t * proc, uint32_t source,
 	  return -1;
 
   //CPU address calculate
-  // int addr = currg->rg_start + offset;
   int addr = currg->rg_start + offset;
 
   if (addr > currg->rg_end){
@@ -220,18 +241,16 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   if (frmnum >= 0)
   {
     printf("TLB hit at read pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
-    printf("read region=%d offset=%d\n", source, offset); 
   }
   else 
   { 
     printf("TLB miss at read pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
-    printf("read region=%d offset=%d\n", source, offset); 
   }
   MEMPHY_dump(proc->mram);
 #endif
 
 #ifdef IODUMP
-  print_pgtbl(proc, 0, -1); //print max TBL
+  printf("read region=%d offset=%d\n", source, offset); 
 #endif
 
   if (frmnum < 0)
@@ -260,6 +279,11 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   #ifdef TLB_DUMP
     printf("Read data: %d\n", data);
   #endif
+
+  #ifdef IODUMP
+    print_pgtbl(proc, 0, -1); //print max TBL
+    MEMPHY_dump(proc->mram);
+  #endif
    
   return 0;
 }
@@ -274,6 +298,10 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
              uint32_t destination, uint32_t offset)
 {
   pthread_mutex_lock(&tlb_lock);
+  #ifdef TLB_DUMP
+    printf("----- TLB WRITE ----- PID: %d PC: %d-----\n", proc->pid, proc->pc);
+  #endif
+
   int frmnum = -1;
 
   /* TODO retrieve TLB CACHED frame num of accessing page(s))*/
@@ -316,17 +344,15 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   if (frmnum >= 0)
   {
     printf("TLB hit at write pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
-    printf("write region=%d offset=%d data=%d\n", destination, offset, data); 
   }
   else 
   { 
     printf("TLB miss at write pid=%d pgn=%d frm=%d\n", proc->pid, pgn, frmnum);
-    printf("write region=%d offset=%d data=%d\n", destination, offset, data); 
   }
-  MEMPHY_dump(proc->mram);
 #endif
+
 #ifdef IODUMP
-  print_pgtbl(proc, 0, -1); //print max TBL
+    printf("write region=%d offset=%d data=%d\n", destination, offset, data); 
 #endif
 
   if (frmnum < 0)
@@ -351,6 +377,11 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   //Write from memphy
   int phyaddr = (frmnum << PAGING_ADDR_FPN_LOBIT) + off;
   MEMPHY_write(proc->mram, phyaddr, data);
+
+  #ifdef IODUMP
+    print_pgtbl(proc, 0, -1); //print max TBL
+    MEMPHY_dump(proc->mram);
+  #endif
 
   pthread_mutex_unlock(&tlb_lock);
   return 0;
