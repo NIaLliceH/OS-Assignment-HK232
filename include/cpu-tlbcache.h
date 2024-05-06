@@ -71,5 +71,4 @@ int init_tlbmemphy(struct memphy_struct *mp, int max_size);
 #define SET_TLB_FRMNUM(x, value) TLB_SETVAL(x, value, TLB_ENTRY_FRMNUM_MASK, FRMNUM_LOBIT)
 
 
-
 #endif // TLBCACHE_H

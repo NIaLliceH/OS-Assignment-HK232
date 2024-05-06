@@ -26,8 +26,8 @@
 #define TLB_DBG
 
 
-void print_entry(uint64_t entry){
-      printf("%01lld %05lld %05lld %05lld\n",
+void print_entry(TLB_entry_t entry){
+      printf("%01lld %05lld %05lld %05lld",
       TLB_VALID(entry),
       TLB_PID(entry),
       TLB_TAG(entry),
@@ -35,7 +35,7 @@ void print_entry(uint64_t entry){
    );
 }
 
-void set_TLB_entry(uint64_t *entry, int valid, int pgnum, int pid, int frmnum){
+void set_TLB_entry(TLB_entry_t *entry, int valid, int pgnum, int pid, int frmnum){
    *entry = 0;
    SET_TLB_VALID(*entry, valid);
    SET_TLB_TAG(*entry, pgnum);
@@ -57,16 +57,17 @@ int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* frmnum)
     *      direct mapped, associated mapping etc.
     */
    //Cast storage to uint64, as each entry is 64 bits
-   uint64_t* storage = (uint64_t*)tlb->storage;
-   int storageSz = tlb->maxsz / sizeof(uint64_t);
+   int storageSz = tlb->maxsz / sizeof(TLB_entry_t);
 
    //SIMULATE FULLY-ASSOC PARALLEL COMPARATORS BY LOOPING
    for (int index = 0; index < storageSz; index++){
-      uint64_t *entry = &(storage[index]);
-      if (TLB_VALID(*entry) 
-      && TLB_TAG(*entry) == pgnum 
-      && TLB_PID(*entry) == pid){
-         *frmnum = TLB_FRMNUM(*entry);
+      TLB_entry_t entry = 0;
+      TLBMEMPHY_read(tlb, index, &entry);
+
+      if (TLB_VALID(entry) 
+      && TLB_TAG(entry) == pgnum 
+      && TLB_PID(entry) == pid){
+         *frmnum = TLB_FRMNUM(entry);
          return 0;
       }
    }
@@ -82,48 +83,56 @@ int tlb_cache_read(struct memphy_struct * tlb, int pid, int pgnum, int* frmnum)
  *  @pgnum: page number
  *  @value: obtained value
  */
-//equivalent of pg_setpage
-
-
 int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
 {
    /* TODO: the identify info is mapped to 
     *      cache line by employing:
     *      direct mapped, associated mapping etc.
     */
-   uint64_t* storage = (uint64_t*)tlb->storage;
-   int storageSz = tlb->maxsz / sizeof(uint64_t);
+   int storageSz = tlb->maxsz / sizeof(TLB_entry_t);
 
    // pthread_mutex_lock(&tlb_lock);
    //PRIORITIZE FINDING EXISTING ENTRY TO UPDATE
    for (int index = 0; index < storageSz; index++){
-      uint64_t *entry = &(storage[index]);
-      if (TLB_VALID(*entry) 
-      && TLB_TAG(*entry) == pgnum 
-      && TLB_PID(*entry) == pid){
+
+      TLB_entry_t entry = 0;
+      TLBMEMPHY_read(tlb, index, &entry);
+
+      if (TLB_VALID(entry) 
+      && TLB_TAG(entry) == pgnum 
+      && TLB_PID(entry) == pid){
          //FOUND EXISTING ENTRY
-         set_TLB_entry(entry, 1, pgnum, pid, value);
+         set_TLB_entry(&entry, 1, pgnum, pid, value);
+         
+         TLBMEMPHY_write(tlb, index, entry);
+
          return 0;
       }
    }
 
    //FIND FREE/INVALID SPACE
    for (int index = 0; index < storageSz; index++){
-      uint64_t *entry = &(storage[index]);
-      if (!TLB_VALID(*entry)){
+      TLB_entry_t entry = 0;
+      TLBMEMPHY_read(tlb, index, &entry);
+
+      if (!TLB_VALID(entry)){
          //FOUND SPACE
-         set_TLB_entry(entry, 1, pgnum, pid, value);
-         
+         set_TLB_entry(&entry, 1, pgnum, pid, value);
+         TLBMEMPHY_write(tlb, index, entry);
+
          return 0;
       }
    }
 
-   //FREE SPACE NOT FOUND, REPLACE EXISTING
+   //FREE SPACE NOT FOUND, REPLACE RANDOM EXISTING ENTRY
    int r = rand() % storageSz;
-   uint64_t *victimEntry = &(storage[r]);
-   set_TLB_entry(victimEntry, 1, pgnum, pid, value);
-   // pthread_mutex_unlock(&tlb_lock);
+   TLB_entry_t victimEntry = 0;
+   TLBMEMPHY_read(tlb, r, &victimEntry);
 
+   set_TLB_entry(&victimEntry, 1, pgnum, pid, value);
+   TLBMEMPHY_write(tlb, r, victimEntry);
+   
+   // pthread_mutex_unlock(&tlb_lock);
    return 0;
 }
 
@@ -134,18 +143,22 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
     *      cache line by employing:
     *      direct mapped, associated mapping etc.
     */
-   uint64_t* storage = (uint64_t*)tlb->storage;
-   int storageSz = tlb->maxsz / sizeof(uint64_t);
+   int storageSz = tlb->maxsz / sizeof(TLB_entry_t);
 
    int found = -1;
    int index;
    // pthread_mutex_lock(&tlb_lock);
    for (index = 0; index < storageSz; index++){
-      uint64_t *entry = &(storage[index]);
-      if (TLB_VALID(*entry) && TLB_PID(*entry) == pid){
+      TLB_entry_t entry = 0;
+      TLBMEMPHY_read(tlb, index, &entry);
+
+      if (TLB_VALID(entry) && TLB_PID(entry) == pid){
          //FOUND EXISTING ENTRY OF PID
-         if (pgnum < 0 || TLB_TAG(*entry) == pgnum){
-            SET_TLB_VALID(*entry, 0);
+         if (pgnum < 0 || TLB_TAG(entry) == pgnum){
+            SET_TLB_VALID(entry, 0);
+
+            TLBMEMPHY_write(tlb, index, entry);
+
             found = 0;
             //Return if it's not the clear all entry operation
             if (pgnum != -1) 
@@ -158,65 +171,62 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
    return found;
 }
 
-// #pragma region UNUSED
+/*
+ *  TLBMEMPHY_read natively supports MEMPHY device interfaces
+ *  @mp: memphy struct
+ *  @addr: address
+ *  @value: obtained value
+ */
+int TLBMEMPHY_read(struct memphy_struct * mp, int addr, TLB_entry_t *value)
+{
+   if (mp == NULL)
+     return -1;
 
-// /*
-//  *  TLBMEMPHY_read natively supports MEMPHY device interfaces
-//  *  @mp: memphy struct
-//  *  @addr: address
-//  *  @value: obtained value
-//  */
-// int TLBMEMPHY_read(struct memphy_struct * mp, int addr, BYTE *value)
-// {
-//    if (mp == NULL)
-//      return -1;
+   /* TLB cached is random access by native */
+   *value = ((TLB_entry_t *)mp->storage)[addr];
 
-//    /* TLB cached is random access by native */
-//    *value = mp->storage[addr];
+   return 0;
+}
 
-//    return 0;
-// }
+/*
+ *  TLBMEMPHY_write natively supports MEMPHY device interfaces
+ *  @mp: memphy struct
+ *  @addr: address
+ *  @data: written data
+ */
+int TLBMEMPHY_write(struct memphy_struct * mp, int addr, TLB_entry_t data)
+{
+   if (mp == NULL)
+     return -1;
 
+   /* TLB cached is random access by native */
+   ((TLB_entry_t *)mp->storage)[addr] = data;
 
-// /*
-//  *  TLBMEMPHY_write natively supports MEMPHY device interfaces
-//  *  @mp: memphy struct
-//  *  @addr: address
-//  *  @data: written data
-//  */
-// int TLBMEMPHY_write(struct memphy_struct * mp, int addr, BYTE data)
-// {
-//    if (mp == NULL)
-//      return -1;
+   return 0;
+}
 
-//    /* TLB cached is random access by native */
-//    mp->storage[addr] = data;
-
-//    return 0;
-// }
-
-// /*
-//  *  TLBMEMPHY_format natively supports MEMPHY device interfaces
-//  *  @mp: memphy struct
-//  */
-
-// #pragma endregion
+/*
+ *  TLBMEMPHY_format natively supports MEMPHY device interfaces
+ *  @mp: memphy struct
+ */
 
 int TLBMEMPHY_dump(struct memphy_struct * tlb)
 {
    /*TODO dump memphy contnt mp->storage 
     *     for tracing the memory content
     */
-   uint64_t* storage = (uint64_t*)tlb->storage;
-   int storageSz = tlb->maxsz / sizeof(uint64_t);
+   int storageSz = tlb->maxsz / sizeof(TLB_entry_t);
    int i;
 
    // sprintf(stdout, "%5s %5s %5s %5s\n", 
    //    "Valid", "TAG", "PID", "FRMNUM");
 
 	for (i = 0; i < storageSz; i++) {
-      if (TLB_VALID(storage[i])){
-         print_entry(storage[i]);
+      TLB_entry_t entry = 0;
+      TLBMEMPHY_read(tlb, i, &entry);
+      if (TLB_VALID(entry)){
+         print_entry(entry);
+         puts("");
       }
       // else break;
 	}

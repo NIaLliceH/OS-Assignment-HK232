@@ -86,34 +86,35 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   pthread_mutex_unlock(&mmvm_lock);
   /*Allocate at the toproof */
 							  
-  // struct vm_rg_struct rgnode;
+  struct vm_rg_struct rgnode;
 
-  // if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
-  // {
-  //   caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
-  //   caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
+  int inc_sz = PAGING_PAGE_ALIGNSZ(size);
 
-  //   struct vm_rg_struct *newrg = malloc(sizeof(struct vm_rg_struct));
-  //   int inc_sz = rgnode.rg_end - rgnode.rg_start;
-  //   int inc_amt = PAGING_PAGE_ALIGNSZ(inc_sz);
-  //   int incnumpage = inc_amt / PAGING_PAGESZ;
+  if (get_free_vmrg_area(caller, vmaid, inc_sz, &rgnode) == 0)
+  {
+    caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
+    caller->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
 
-  //   if (vm_map_ram(caller, rgnode.rg_start, rgnode.rg_end, rgnode.rg_start, incnumpage, newrg) < 0)
-  //   {
-  //     pthread_mutex_unlock(&mmvm_lock);
-  //     return -1;
-  //   }
+    struct vm_rg_struct *newrg = malloc(sizeof(struct vm_rg_struct));
+    int inc_sz = rgnode.rg_end - rgnode.rg_start;
+    int inc_amt = PAGING_PAGE_ALIGNSZ(inc_sz);
+    int incnumpage = inc_amt / PAGING_PAGESZ;
 
-  //   *alloc_addr = rgnode.rg_start;
-	// 	pthread_mutex_unlock(&mmvm_lock);
-  //   return 0;
-  // }
+    if (vm_map_ram(caller, rgnode.rg_start, rgnode.rg_end, rgnode.rg_start, incnumpage, newrg) < 0)
+    {
+      pthread_mutex_unlock(&mmvm_lock);
+      return -1;
+    }
+
+    *alloc_addr = rgnode.rg_start;
+		pthread_mutex_unlock(&mmvm_lock);
+    return 0;
+  }
 
   /* TODO get_free_vmrg_area FAILED handle the region management (Fig.6)*/
 
   /*Attempt to increate limit to get space */
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
-  int inc_sz = PAGING_PAGE_ALIGNSZ(size);
   // int inc_limit_ret
   int old_sbrk;
 
@@ -191,7 +192,9 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
 
   for (int i = 0; i < incnumpage; i++)
   {
-    MEMPHY_put_freefp(caller->mram, caller->mm->pgd[pgn + i]);
+    int fpn;
+    if (pg_getpage(caller->mm, pgn + i, &fpn, caller) != 0) return -1;
+    MEMPHY_put_freefp(caller->mram, fpn);
     SETBIT(caller->mm->pgd[pgn + i], PAGING_PTE_DIRTY_MASK);
     clear_pgn_node(caller, pgn+i);
   }
@@ -252,12 +255,12 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     /* TODO: Play with your paging theory here */
     /* Find victim page */
-    if (find_victim_page(caller->mm, &vicpgn) == -1)
+    if (find_victim_page(caller->mm, &vicpgn) != 0)
     {
       return -1;
     }
     /* Get free frame in MEMSWP */
-    if (MEMPHY_get_freefp(caller->active_mswp, &swpfpn) == -1)
+    if (MEMPHY_get_freefp(caller->active_mswp, &swpfpn) != 0)
     {
       return -1;
     }
@@ -350,7 +353,16 @@ int __read(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE *data)
   if( currg -> rg_start >= currg -> rg_end || currg == NULL || cur_vma == NULL) /* Invalid memory identify */
 	  return -1;
 
-  pg_getval(caller->mm, currg->rg_start + offset, data, caller);
+  int addr = currg->rg_start + offset;
+    
+  if (addr > currg->rg_end){
+    #ifdef TLB_DUMP
+      printf("Address out of range!\n");
+    #endif
+    return -1;
+  }
+
+  pg_getval(caller->mm, addr, data, caller);
 
   return 0;
 }
@@ -394,8 +406,17 @@ int __write(struct pcb_t *caller, int vmaid, int rgid, int offset, BYTE value)
   
   if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
 	  return -1;
-  if (currg->rg_start + offset >  currg->rg_end) 
-          return -1; //invalid access
+
+  int addr = currg->rg_start + offset;
+    
+  if (addr > currg->rg_end){
+    #ifdef TLB_DUMP
+      printf("Address out of range!\n");
+    #endif
+    return -1;
+  }
+  
+
   pg_setval(caller->mm, currg->rg_start + offset, value, caller);
 
   return 0;
