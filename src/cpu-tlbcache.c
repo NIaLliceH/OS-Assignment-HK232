@@ -27,7 +27,7 @@
 
 
 void print_entry(TLB_entry_t entry){
-      printf("%01lld %05lld %05lld %05lld\n",
+      printf("%01lld %05lld %05lld %05lld",
       TLB_VALID(entry),
       TLB_PID(entry),
       TLB_TAG(entry),
@@ -215,7 +215,6 @@ int TLBMEMPHY_dump(struct memphy_struct * tlb)
    /*TODO dump memphy contnt mp->storage 
     *     for tracing the memory content
     */
-   TLB_entry_t* storage = (TLB_entry_t*)tlb->storage;
    int storageSz = tlb->maxsz / sizeof(TLB_entry_t);
    int i;
 
@@ -223,8 +222,11 @@ int TLBMEMPHY_dump(struct memphy_struct * tlb)
    //    "Valid", "TAG", "PID", "FRMNUM");
 
 	for (i = 0; i < storageSz; i++) {
-      if (TLB_VALID(storage[i])){
-         print_entry(storage[i]);
+      TLB_entry_t entry = 0;
+      TLBMEMPHY_read(tlb, i, &entry);
+      if (TLB_VALID(entry)){
+         print_entry(entry);
+         puts("");
       }
       // else break;
 	}

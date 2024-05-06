@@ -57,6 +57,7 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 
   /* By default using vmaid = 0 */
   if (__alloc(proc, 0, reg_index, size, &addr) != 0){
+    pthread_mutex_unlock(&tlb_lock);
     return -1;
   }
 
@@ -64,7 +65,10 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
   struct vm_rg_struct *currg = get_symrg_byid(proc->mm, reg_index);
   struct vm_area_struct *cur_vma = get_vma_by_num(proc->mm, 0);
   if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
-	  return -1;
+  {
+    pthread_mutex_unlock(&tlb_lock);
+    return -1;
+  }
 
     printf("TLB-Alloc: Region start: %lu, Region end: %lu\n", currg->rg_start, currg->rg_end);
   #endif
@@ -80,13 +84,16 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
   /* by using tlb_cache_read()/tlb_cache_write()*/
   for (; pgit < pgn_count; ++pgit){
 
-    if (pg_getpage(proc->mm, pgn + pgit, &frmnum, proc) != 0)
+    if (pg_getpage(proc->mm, pgn + pgit, &frmnum, proc) != 0){
+      pthread_mutex_unlock(&tlb_lock);
       return -1;
+    }
 
     if (frmnum == -1){
       #ifdef TLB_DUMP
         printf("TLB page fault!:\n");
       #endif
+      pthread_mutex_unlock(&tlb_lock);
       return -1;
     }
 
@@ -94,8 +101,10 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
       printf("TLB-Alloc: Caching PID: %d PAGE: %d FRAME: %d\n", proc->pid, pgn + pgit, frmnum);
     #endif
 
-    if (tlb_cache_write(proc->tlb, proc->pid, pgn + pgit, frmnum) != 0)
+    if (tlb_cache_write(proc->tlb, proc->pid, pgn + pgit, frmnum) != 0){
+      pthread_mutex_unlock(&tlb_lock);
       return -1;
+    }
   }
 
   #ifdef TLB_DUMP
@@ -184,11 +193,22 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   //CPU address calculate
   // int addr = currg->rg_start + offset;
   int addr = currg->rg_start + offset;
+
+  if (addr > currg->rg_end){
+    #ifdef TLB_DUMP
+      printf("read region=%d offset=%d\n", source, offset); 
+      printf("Address out of range!\n");
+    #endif
+    pthread_mutex_unlock(&tlb_lock);
+    return -1;
+  }
+
   int pgn = PAGING_PGN(addr);
   int off = PAGING_OFFST(addr);
 
   //get frmnum
   if (tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum) != 0){
+    pthread_mutex_unlock(&tlb_lock);
     return -1;
   }
   ///
@@ -221,6 +241,7 @@ int tlbread(struct pcb_t * proc, uint32_t source,
       #ifdef IODUMP
         printf("Page fault!!!\n");
       #endif
+      pthread_mutex_unlock(&tlb_lock);
       return -1;
     }
     /* TODO update TLB CACHED with frame num of recent accessing page(s)*/
@@ -267,11 +288,22 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
 
   //CPU address calculate
   int addr = currg->rg_start + offset;
+
+  if (addr > currg->rg_end){
+    #ifdef TLB_DUMP
+      printf("write region=%d offset=%d\n", destination, offset); 
+      printf("Address out of range!\n");
+    #endif
+    pthread_mutex_unlock(&tlb_lock);
+    return -1;
+  }
+
   int pgn = PAGING_PGN(addr);
   int off = PAGING_OFFST(addr);
 
   //get frmnum
   if (tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum) != 0){
+    pthread_mutex_unlock(&tlb_lock);
     return -1;
   }
   ///
@@ -304,6 +336,7 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
       #ifdef IODUMP
         printf("Page fault!!!\n");
       #endif
+      pthread_mutex_unlock(&tlb_lock);
       return -1;
     }
 
