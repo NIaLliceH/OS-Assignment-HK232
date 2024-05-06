@@ -265,7 +265,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
       return -1;
     }
     vicpte = mm->pgd[vicpgn];
-    vicfpn = PAGING_FPN(vicpte);
+    vicfpn = vicpte & PAGING_PTE_FPN_MASK;
 
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
     /* Copy victim frame to swap */
@@ -286,7 +286,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
   }
 
-  *fpn = PAGING_FPN(pte);
+  *fpn = pte & PAGING_PTE_FPN_MASK;
   return 0;
 }
 
@@ -306,7 +306,7 @@ int pg_getval(struct mm_struct *mm, int addr, BYTE *data, struct pcb_t *caller)
   if(pg_getpage(mm, pgn, &fpn, caller) != 0) 
     return -1; /* invalid page access */
 
-  int phyaddr = (fpn * PAGING_PAGESZ) + off;
+  int phyaddr = (fpn  << PAGING_ADDR_FPN_LOBIT) + off;
 
   MEMPHY_read(caller->mram,phyaddr, data);
 
@@ -329,7 +329,7 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
   if(pg_getpage(mm, pgn, &fpn, caller) != 0) 
     return -1; /* invalid page access */
 
-  int phyaddr = (fpn * PAGING_PAGESZ) + off;
+  int phyaddr = (fpn  << PAGING_ADDR_FPN_LOBIT) + off;
 
   MEMPHY_write(caller->mram,phyaddr, value);
 
