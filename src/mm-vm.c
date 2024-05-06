@@ -195,7 +195,7 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
     int fpn;
     if (pg_getpage(caller->mm, pgn + i, &fpn, caller) != 0) return -1;
     MEMPHY_put_freefp(caller->mram, fpn);
-    SETBIT(caller->mm->pgd[pgn + i], PAGING_PTE_DIRTY_MASK);
+    CLRBIT(caller->mm->pgd[pgn + i], PAGING_PTE_PRESENT_MASK);
     clear_pgn_node(caller, pgn+i);
   }
 
@@ -265,7 +265,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
       return -1;
     }
     vicpte = mm->pgd[vicpgn];
-    vicfpn = PAGING_FPN(vicpte);
+    vicfpn = vicpte & PAGING_PTE_FPN_MASK;
 
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
     /* Copy victim frame to swap */
@@ -286,7 +286,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
   }
 
-  *fpn = PAGING_FPN(pte);
+  *fpn = pte & PAGING_PTE_FPN_MASK;
   return 0;
 }
 
@@ -306,7 +306,7 @@ int pg_getval(struct mm_struct *mm, int addr, BYTE *data, struct pcb_t *caller)
   if(pg_getpage(mm, pgn, &fpn, caller) != 0) 
     return -1; /* invalid page access */
 
-  int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
+  int phyaddr = (fpn  << PAGING_ADDR_FPN_LOBIT) + off;
 
   MEMPHY_read(caller->mram,phyaddr, data);
 
@@ -329,7 +329,7 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
   if(pg_getpage(mm, pgn, &fpn, caller) != 0) 
     return -1; /* invalid page access */
 
-  int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
+  int phyaddr = (fpn  << PAGING_ADDR_FPN_LOBIT) + off;
 
   MEMPHY_write(caller->mram,phyaddr, value);
 
@@ -429,6 +429,8 @@ int pgwrite(
 		uint32_t destination, // Index of destination register
 		uint32_t offset)
 {
+
+  int ret = __write(proc, 0, destination, offset, data);
 #ifdef IODUMP
   printf("write region=%d offset=%d value=%d\n", destination, offset, data);
 #ifdef PAGETBL_DUMP
@@ -437,7 +439,7 @@ int pgwrite(
   MEMPHY_dump(proc->mram);
 #endif
 
-  return __write(proc, 0, destination, offset, data);
+  return ret;
 }
 
 
