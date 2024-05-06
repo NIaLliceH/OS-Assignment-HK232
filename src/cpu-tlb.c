@@ -273,7 +273,7 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   }
 
   //Read from memphy
-  int phyaddr = (frmnum << PAGING_ADDR_FPN_LOBIT) + off;
+  int phyaddr = (frmnum * PAGING_PAGESZ) + off;
   MEMPHY_read(proc->mram, phyaddr, &data);
 
   #ifdef TLB_DUMP
@@ -375,7 +375,7 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   }
 
   //Write from memphy
-  int phyaddr = (frmnum << PAGING_ADDR_FPN_LOBIT) + off;
+  int phyaddr = (frmnum * PAGING_PAGESZ) + off;
   MEMPHY_write(proc->mram, phyaddr, data);
 
   #ifdef IODUMP
