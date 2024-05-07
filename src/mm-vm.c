@@ -305,14 +305,11 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     pte = mm->pgd[pgn];
 
-    enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
+    // enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
   }
 
   *fpn = pte & PAGING_PTE_FPN_MASK;
 
-  if (*fpn == 32){
-    printf("Error\n");
-  }
   return 0;
 }
 
@@ -599,8 +596,13 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
     return -1;
   }
   struct pgn_t *prev = NULL;
+
+  int all_swapped = 1;
+
   while (pg->pg_next)
   {
+    if ((mm->pgd[pg->pgn] & PAGING_PTE_SWAPPED_MASK) > 0)
+      all_swapped = 0;
     prev = pg;
     pg = pg->pg_next;
   }
@@ -615,6 +617,9 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
   if (GETVAL(pte, PAGING_PTE_SWAPPED_MASK, 0) != 0)
   {
     // Find another victim page recursively
+    if (all_swapped > 0){
+      return -1;
+    }
     enlist_pgn_node(&mm->fifo_pgn, *retpgn);
     return find_victim_page(mm, retpgn);
   }
