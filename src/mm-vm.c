@@ -260,55 +260,75 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
   if (!PAGING_PAGE_PRESENT(pte))
     return -1;
 
-  if (pte & PAGING_PTE_SWAPPED_MASK)
-  { /* Page is not online, make it actively living */
-    int vicpgn, swpfpn;
-    int vicfpn;
-    uint32_t vicpte;
-
+  if (GETVAL(pte, PAGING_PTE_SWAPPED_MASK, 0) > 0)
+  { 
+    /* Page is not online, make it actively living */
     int swapType = GETVAL(pte, PAGING_PTE_SWPTYP_MASK, PAGING_PTE_SWPTYP_LOBIT);
     // the target frame storing our variable
-    int tgtfpn = GETVAL(pte, PAGING_PTE_SWPOFF_MASK, PAGING_PTE_SWPOFF_LOBIT);
+    int swapOff = PAGING_SWP(pte);
 
-    caller->active_mswp = caller->mswp[swapType];
-
-    /* TODO: Play with your paging theory here */
     /* Find victim page */
+    int vicpgn, vicSwapOff; 
+    int vicfpn;
+    uint32_t vicpte;
     if (find_victim_page(caller->mm, &vicpgn) != 0)
     {
-      return -1;
+      //All pages of current process are swapped out/not allocated, cant find a victim page
+      //Therefore, try to find a free frame in RAM
+      
+      if (MEMPHY_get_freefp(caller->mram, fpn) != 0){
+        //No frame left in RAM, get failed
+        return -1;
+      }
+
+      //Copy from swap to the newly allocated frame in RAM
+      __swap_cp_page(caller->active_mswp, swapOff, caller->mram, *fpn);
+
+      //Set the found fpn to the needed pte
+      pte_set_fpn(&mm->pgd[pgn], *fpn);
+
+      //Put pgn back to fifo_pgn list
+      enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
+      //Frame is also found, return right away;D
+      return 0;
     }
 
-    /* Get free frame in MEMSWP */
-    if (MEMPHY_get_freefp(caller->active_mswp, &swpfpn) != 0)
-    {
-      return -1;
-    }
     vicpte = mm->pgd[vicpgn];
     vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 
+    //Find a suitable frame in all swap to perform swap out
+    for (int swapIndex = 0; swapIndex < swapType; ++swapIndex){
+      caller->active_mswp = caller->mswp[swapIndex];
+      MEMPHY_get_freefp(caller->active_mswp, &vicSwapOff);
+      if (vicSwapOff != -1) break;
+    }
+
+    //No frame in all swaps, get fail
+    if (vicSwapOff < 0){
+      return -1;
+    }
+    
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
     /* Copy victim frame to swap */
-    __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, swpfpn);
+    __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, vicSwapOff);
     /* Copy target frame from swap to mem */
-    __swap_cp_page(caller->active_mswp, tgtfpn, caller->mram, vicfpn);
+    __swap_cp_page(caller->active_mswp, swapOff, caller->mram, vicfpn);
 
-    // print_pgtbl(caller, 0, -1);
-    // printf("setaaaaaaaaaaaaaaaa%d: %d: %08x\n", vicpgn, swpfpn, mm->pgd[vicpgn]);
+    //Set the swap info bits of victim page entry
+    pte_set_swap(&mm->pgd[vicpgn], swapType, vicSwapOff);
 
-    pte_set_swap(&mm->pgd[vicpgn], swapType, swpfpn);
-
-    // print_pgtbl(caller, 0, -1);
-
-    /* Update its online status of the target page */
+    //Set the frame number to the needed pte
     pte_set_fpn(&mm->pgd[pgn], vicfpn);
 
+    //Update pte after swapping-in
     pte = mm->pgd[pgn];
 
-    // enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
+    //Doenst store swapped out pgn in fifo_pgn list
+    //So put it back in after swapping-in
+    enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
   }
 
-  *fpn = pte & PAGING_PTE_FPN_MASK;
+  *fpn = GETVAL(pte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 
   return 0;
 }
@@ -588,21 +608,17 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
  */
 int find_victim_page(struct mm_struct *mm, int *retpgn) 
 {
+  //Fifo_pgn doesnt store swapped pages, no need for special checks
   struct pgn_t *pg = mm->fifo_pgn;
 
-  /* TODO: Implement the theoretical mechanism to find the victim page */
+  /* TODO: Implement the theorical mechanism to find the victim page */
   if (!pg)
   {
     return -1;
   }
   struct pgn_t *prev = NULL;
-
-  int all_swapped = 1;
-
   while (pg->pg_next)
   {
-    if ((mm->pgd[pg->pgn] & PAGING_PTE_SWAPPED_MASK) > 0)
-      all_swapped = 0;
     prev = pg;
     pg = pg->pg_next;
   }
@@ -611,18 +627,6 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
   if (prev) prev->pg_next = NULL;
   
   free(pg);
-
-  // Check if the victim page is also swapped out
-  uint32_t pte = mm->pgd[*retpgn];
-  if (GETVAL(pte, PAGING_PTE_SWAPPED_MASK, 0) != 0)
-  {
-    // Find another victim page recursively
-    if (all_swapped > 0){
-      return -1;
-    }
-    enlist_pgn_node(&mm->fifo_pgn, *retpgn);
-    return find_victim_page(mm, retpgn);
-  }
 
   return 0;
 }
