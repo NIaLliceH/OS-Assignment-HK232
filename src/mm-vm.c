@@ -295,9 +295,10 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     vicpte = mm->pgd[vicpgn];
     vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
-
+  
+    int swapIndex = 0;
     //Find a suitable frame in all swap to perform swap out
-    for (int swapIndex = 0; swapIndex < swapType; ++swapIndex){
+    for (; swapIndex < 4; ++swapIndex){
       caller->active_mswp = caller->mswp[swapIndex];
       MEMPHY_get_freefp(caller->active_mswp, &vicSwapOff);
       if (vicSwapOff != -1) break;
@@ -309,13 +310,15 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     }
     
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
-    /* Copy victim frame to swap */
+    /* Copy victim frame to RECENTLY active swap from the loop */
     __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, vicSwapOff);
+    
     /* Copy target frame from swap to mem */
+    caller->active_mswp = caller->mswp[swapType];
     __swap_cp_page(caller->active_mswp, swapOff, caller->mram, vicfpn);
 
     //Set the swap info bits of victim page entry
-    pte_set_swap(&mm->pgd[vicpgn], swapType, vicSwapOff);
+    pte_set_swap(&mm->pgd[vicpgn], swapIndex, vicSwapOff);
 
     //Set the frame number to the needed pte
     pte_set_fpn(&mm->pgd[pgn], vicfpn);

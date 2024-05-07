@@ -130,7 +130,7 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
   int pgit, fpn;
   //struct framephy_struct *newfp_str;
 
-struct framephy_struct *newfp_str = NULL;
+  struct framephy_struct *newfp_str = NULL;
 
   for (pgit = 0; pgit < req_pgnum; pgit++)
   {
@@ -141,29 +141,46 @@ struct framephy_struct *newfp_str = NULL;
     }
     else
     { // ERROR CODE of obtaining somes but not enough frames
-      int vicpgn, swpfpn;
-      if (find_victim_page(caller->mm, &vicpgn) == -1 || MEMPHY_get_freefp(caller->active_mswp, &swpfpn) == -1)
-      {
-        if (*frm_lst == NULL)
-        {
-          return -1;
-        }
-        else
-        {
-          struct framephy_struct *freefp_str;
-          while (*frm_lst != NULL)
-          {
-            freefp_str = *frm_lst;
-            *frm_lst = (*frm_lst)->fp_next;
-            free(freefp_str);
-          }
-          return -3000;
-        }
+      //Try to find a victim page of the same process to swap out
+      int failed = 0;
+      int vicpgn, vicfpn, vicSwapOff;
+
+      if (find_victim_page(caller->mm, &vicpgn) == -1){
+        failed = 1;
       }
+      
+      int swapIndex = 0;
+      //Find a suitable frame in all swap to perform swap out
+      for (; swapIndex < 4 && failed == 0; ++swapIndex){
+        caller->active_mswp = caller->mswp[swapIndex];
+        MEMPHY_get_freefp(caller->active_mswp, &vicSwapOff);
+        if (vicSwapOff != -1) break;
+      }
+
+      //No frame in all swaps, get fail
+      if (vicSwapOff < 0){
+        failed = 1;
+      }
+
+      //All effort failed
+      if (failed > 0){
+        struct framephy_struct *freefp_str;
+        while (*frm_lst != NULL){
+          freefp_str = *frm_lst;
+          *frm_lst = (*frm_lst)->fp_next;
+          free(freefp_str);
+        }
+        return -3000;
+      }
+
+      //Victim page found, swapping out
       uint32_t vicpte = caller->mm->pgd[vicpgn];
-      int vicfpn = PAGING_FPN(vicpte);
-      __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, swpfpn);
-      pte_set_swap(&caller->mm->pgd[vicpgn], 0, swpfpn);
+      vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
+
+      //Swap out to the RECENTLY active swap
+      __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, vicSwapOff);
+
+      pte_set_swap(&caller->mm->pgd[vicpgn], swapIndex, vicSwapOff);
       newfp_str->fpn = vicfpn;
     }
     newfp_str->fp_next = *frm_lst;
