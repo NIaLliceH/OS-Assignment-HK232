@@ -98,8 +98,10 @@ int MEMPHY_seq_write(struct memphy_struct * mp, int addr, BYTE value)
 int MEMPHY_write(struct memphy_struct * mp, int addr, BYTE data)
 {
    pthread_mutex_lock(&memphy_lock);
-   if (mp == NULL)
+   if (mp == NULL){
+      pthread_mutex_unlock(&memphy_lock);
      return -1;
+   }
 
    if (mp->rdmflg)
       mp->storage[addr] = data;
@@ -147,8 +149,10 @@ int MEMPHY_get_freefp(struct memphy_struct *mp, int *retfpn)
    pthread_mutex_lock(&memphy_lock);
    struct framephy_struct *fp = mp->free_fp_list;
 
-   if (fp == NULL)
+   if (fp == NULL){
+      pthread_mutex_unlock(&memphy_lock);
      return -1;
+   }
 
    *retfpn = fp->fpn;
    mp->free_fp_list = fp->fp_next;

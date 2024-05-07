@@ -153,21 +153,29 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
  *
  */
 int clear_pgn_node(struct pcb_t * proc , int pgn){
-  struct pgn_t* newlist = NULL;
+  struct pgn_t* prev = NULL;
   struct pgn_t* temp = proc->mm->fifo_pgn;
   if(temp==NULL) return -1;
   while(temp != NULL){
     if(temp->pgn == pgn){
-      if(newlist == NULL){
+      if(prev == NULL){
         proc->mm->fifo_pgn = temp->pg_next;
       }
       else{
-        newlist->pg_next = temp->pg_next;
+        //Found the node to delete
+        prev->pg_next = temp->pg_next;
+        break;
       }
+    } else {
+      prev = temp;
     }
-    newlist = temp;
     temp = temp->pg_next;
   }
+
+  //Free the node if it's found in the loop
+  if (temp != NULL) 
+    free(temp);
+
   return 0;
 }
 int __free(struct pcb_t *caller, int vmaid, int rgid)
@@ -573,13 +581,13 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
 {
   struct pgn_t *pg = mm->fifo_pgn;
 
-  /* TODO: Implement the theorical mechanism to find the victim page */
+  /* TODO: Implement the theoretical mechanism to find the victim page */
   if (!pg)
   {
     return -1;
   }
   struct pgn_t *prev = NULL;
-  while (pg->pg_next || mm->pgd[pg->pgn] & PAGING_PTE_SWAPPED_MASK)
+  while (pg->pg_next)
   {
     prev = pg;
     pg = pg->pg_next;
@@ -589,6 +597,15 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
   if (prev) prev->pg_next = NULL;
   
   free(pg);
+
+  // Check if the victim page is also swapped out
+  uint32_t pte = mm->pgd[*retpgn];
+  if (pte & PAGING_PTE_SWAPPED_MASK)
+  {
+    // Find another victim page recursively
+    enlist_pgn_node(&mm->fifo_pgn, *retpgn);
+    return find_victim_page(mm, retpgn);
+  }
 
   return 0;
 }
