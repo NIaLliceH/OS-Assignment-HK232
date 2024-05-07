@@ -266,8 +266,9 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     int vicfpn;
     uint32_t vicpte;
 
-    int swapType = pte & PAGING_PTE_SWPTYP_MASK;
-    int tgtfpn = PAGING_SWP(pte); // the target frame storing our variable
+    int swapType = GETVAL(pte, PAGING_PTE_SWPTYP_MASK, PAGING_PTE_SWPTYP_LOBIT);
+    // the target frame storing our variable
+    int tgtfpn = GETVAL(pte, PAGING_PTE_SWPOFF_MASK, PAGING_PTE_SWPOFF_LOBIT);
 
     caller->active_mswp = caller->mswp[swapType];
 
@@ -284,7 +285,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
       return -1;
     }
     vicpte = mm->pgd[vicpgn];
-    vicfpn = vicpte & PAGING_PTE_FPN_MASK;
+    vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
     /* Copy victim frame to swap */
@@ -304,7 +305,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     pte = mm->pgd[pgn];
 
-    // enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
+    enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
   }
 
   *fpn = pte & PAGING_PTE_FPN_MASK;
@@ -611,7 +612,7 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
 
   // Check if the victim page is also swapped out
   uint32_t pte = mm->pgd[*retpgn];
-  if (pte & PAGING_PTE_SWAPPED_MASK)
+  if (GETVAL(pte, PAGING_PTE_SWAPPED_MASK, 0) != 0)
   {
     // Find another victim page recursively
     enlist_pgn_node(&mm->fifo_pgn, *retpgn);
