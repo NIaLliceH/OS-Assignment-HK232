@@ -83,7 +83,7 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  */
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr)
 {
-  pthread_mutex_unlock(&mmvm_lock);
+  pthread_mutex_lock(&mmvm_lock);
   /*Allocate at the toproof */
 							  
   struct vm_rg_struct rgnode;
@@ -131,14 +131,14 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   *alloc_addr = old_sbrk;
 
-  struct vm_area_struct *remain_rg = get_vma_by_num(caller->mm, vmaid);
-  if (old_sbrk + size < remain_rg->sbrk)
-  {
-    struct vm_rg_struct *rg_free = malloc(sizeof(struct vm_rg_struct));
-    rg_free->rg_start = old_sbrk + size;
-    rg_free->rg_end = remain_rg->sbrk;
-    enlist_vm_freerg_list(caller->mm, rg_free);
-  }
+  // struct vm_area_struct *remain_rg = get_vma_by_num(caller->mm, vmaid);
+  // if (old_sbrk + size < remain_rg->sbrk)
+  // {
+  //   struct vm_rg_struct *rg_free = malloc(sizeof(struct vm_rg_struct));
+  //   rg_free->rg_start = old_sbrk + size;
+  //   rg_free->rg_end = remain_rg->sbrk;
+  //   enlist_vm_freerg_list(caller->mm, rg_free);
+  // }
 
   pthread_mutex_unlock(&mmvm_lock);
 
@@ -158,14 +158,14 @@ int clear_pgn_node(struct pcb_t * proc , int pgn){
   if(temp==NULL) return -1;
   while(temp != NULL){
     if(temp->pgn == pgn){
+      //Found the node to delete
       if(prev == NULL){
         proc->mm->fifo_pgn = temp->pg_next;
       }
       else{
-        //Found the node to delete
         prev->pg_next = temp->pg_next;
-        break;
       }
+      break;
     } else {
       prev = temp;
     }
