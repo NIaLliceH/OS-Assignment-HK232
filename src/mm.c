@@ -174,6 +174,12 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
       }
 
       //Victim page found, swapping out
+
+      #ifdef CPU_TLB
+        //Invalidate the entry of the victim page on tlb
+        tlb_cache_invalidate(caller->tlb, caller->pid, vicpgn);
+      #endif
+
       uint32_t vicpte = caller->mm->pgd[vicpgn];
       vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 

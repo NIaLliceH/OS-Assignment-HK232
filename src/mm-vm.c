@@ -10,6 +10,11 @@
 #include <pthread.h>
 static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
 
+
+#ifdef CPU_TLB
+#include "cpu-tlbcache.h"
+#endif
+
 #ifdef MM_PAGING
 /*enlist_vm_freerg_list - add new rg to freerg_list
  *@mm: memory region
@@ -83,7 +88,7 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  */
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr)
 {
-  pthread_mutex_lock(&mmvm_lock);
+  // pthread_mutex_lock(&mmvm_lock);
   /*Allocate at the toproof */
 							  
   struct vm_rg_struct rgnode;
@@ -102,12 +107,12 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
     if (vm_map_ram(caller, rgnode.rg_start, rgnode.rg_end, rgnode.rg_start, incnumpage, newrg) < 0)
     {
-      pthread_mutex_unlock(&mmvm_lock);
+      // pthread_mutex_unlock(&mmvm_lock);
       return -1;
     }
 
     *alloc_addr = rgnode.rg_start;
-		pthread_mutex_unlock(&mmvm_lock);
+		// pthread_mutex_unlock(&mmvm_lock);
     return 0;
   }
 
@@ -140,7 +145,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   //   enlist_vm_freerg_list(caller->mm, rg_free);
   // }
 
-  pthread_mutex_unlock(&mmvm_lock);
+  // pthread_mutex_unlock(&mmvm_lock);
 
   return 0;
 }
@@ -185,12 +190,12 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
   if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
     return -1;
 
-  pthread_mutex_lock(&mmvm_lock);
+  // pthread_mutex_lock(&mmvm_lock);
   /* TODO: Manage the collect freed region to freerg_list */
   struct vm_rg_struct *temp = get_symrg_byid(caller->mm, rgid);
   if (temp->rg_end == 0)
   {
-    pthread_mutex_unlock(&mmvm_lock);
+    // pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
   int inc_sz = temp->rg_end - temp->rg_start;
@@ -215,7 +220,7 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
   temp->rg_next = NULL;
   /*enlist the obsoleted memory region */
   enlist_vm_freerg_list(caller->mm, rgnode);
-  pthread_mutex_unlock(&mmvm_lock);
+  // pthread_mutex_unlock(&mmvm_lock);
   return 0;
 }
 
@@ -309,6 +314,12 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
       return -1;
     }
     
+    //Swapping out
+    #ifdef CPU_TLB
+      //Invalidate the entry of the victim page on tlb
+      tlb_cache_invalidate(caller->tlb, caller->pid, vicpgn);
+    #endif
+
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
     /* Copy victim frame to RECENTLY active swap from the loop */
     __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, vicSwapOff);
