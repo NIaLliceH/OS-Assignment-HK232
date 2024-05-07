@@ -1,22 +1,17 @@
-// sched.c
 #include "queue.h"
 #include "sched.h"
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
+
 static struct queue_t ready_queue;
 static struct queue_t run_queue;
 static pthread_mutex_t queue_lock;
 
 #ifdef MLQ_SCHED
 static struct queue_t mlq_ready_queue[MAX_PRIO];
-// static int slot[MAX_PRIO]; // static : Can be used for all files
-
+int slot[MAX_PRIO];
 #endif
-void check_size_ready_queue(int k)
-{
-	printf("Size of ready_queue[%d] = %d\n", k, mlq_ready_queue[k].size);
-}
 
 int queue_empty(void)
 {
@@ -35,7 +30,10 @@ void init_scheduler(void)
 	int i;
 
 	for (i = 0; i < MAX_PRIO; i++)
+	{
 		mlq_ready_queue[i].size = 0;
+		slot[i] = MAX_PRIO - i;
+	}
 #endif
 	ready_queue.size = 0;
 	run_queue.size = 0;
@@ -49,68 +47,71 @@ void init_scheduler(void)
  *  We implement stateful here using transition technique
  *  State representation   prio = 0 .. MAX_PRIO, curr_slot = 0..(MAX_PRIO - prio)
  */
- 
- 
+void set_slot_for_queue()
+{
+	for (int i = 0; i < MAX_PRIO; i++)
+		slot[i] = MAX_PRIO - i;
+}
+int check_new_process(int i)
+{
+	for (int j = 0; j < i; j++)
+	{
+		if (empty(&mlq_ready_queue[j]) || slot[j] <= 0)
+			continue;
+		return j - 1;
+	}
+	return -2;
+}
 struct pcb_t *get_mlq_proc(void)
 {
-	
+	struct pcb_t *proc = NULL;
 	/*TODO: get a process from PRIORITY [ready_queue].
 	 * Remember to use lock to protect the queue.
 	 */
-	struct pcb_t *proc = NULL;
-	
-	static int currentPriority = 0; // Start with queue have the highest priority
-	static int currentSpace = MAX_PRIO; // Start with slot = MAX_PRIO
-	
-	pthread_mutex_lock(&queue_lock);
-	
-	// All of queue are empty, cannot get any process
-	if(queue_empty() != -1) {
-		pthread_mutex_unlock(&queue_lock);
-		return NULL;
-	}
-	
-	// Get the process with the greatest priority
-	for(int i = 0; i < currentPriority; i++) {
-		if(!empty(&mlq_ready_queue[i])) {
-			currentPriority = i;
-			currentSpace = MAX_PRIO - i - 1;
-			proc = dequeue(&mlq_ready_queue[i]);
+	int check = 0;
+	int flag = 0;
+	for (int i = 0; i < MAX_PRIO; ++i)
+	{
+		pthread_mutex_lock(&queue_lock);
+		check = check_new_process(i);
+		if (check != -2)
+		{
+			i = check;
 			pthread_mutex_unlock(&queue_lock);
-			return proc;		
+			continue;
 		}
-	}
-	
-	// There is no process with priority better than current priority, check the queue with prio = currentPriority
-	// That queue must still have slot
-	if(!empty(&mlq_ready_queue[currentPriority]) && currentSpace > 0) {
-		proc = dequeue(&mlq_ready_queue[currentPriority]);
-		currentSpace = currentSpace - 1;
-		pthread_mutex_unlock(&queue_lock);
-		return proc;
-	}
-	
-	// Must take the greatest priority > currentPriority (if any)
-	for(int i = currentPriority + 1; i < MAX_PRIO; i++) {
-		if(!empty(&mlq_ready_queue[i])) {
-			currentPriority = i;
-			currentSpace = MAX_PRIO - i - 1;
-			proc = dequeue(&mlq_ready_queue[i]);
+		// printf("iii:...................................%d\n", i);
+		if (empty(&mlq_ready_queue[i]))
+		{
+			if (flag == 1 && i == MAX_PRIO - 1)
+			{
+				flag = 0;
+				set_slot_for_queue();
+				i = -1;
+			}
 			pthread_mutex_unlock(&queue_lock);
-			return proc;		
+			continue;
 		}
+		if (slot[i] <= 0)
+		{
+			flag = 1;
+			if (i == MAX_PRIO - 1)
+			{
+				flag = 0;
+				set_slot_for_queue();
+				i = -1;
+			}
+			pthread_mutex_unlock(&queue_lock);
+			continue;
+		}
+		// printf("i:.... %d slot: %d\n", i, slot[i]);
+		proc = dequeue(&mlq_ready_queue[i]);
+		slot[i]--;
+		pthread_mutex_unlock(&queue_lock);
+		break;
 	}
-	
-	// Must use that queue with currentPriority
-	if(!empty(&mlq_ready_queue[currentPriority])) {
-		proc = dequeue(&mlq_ready_queue[currentPriority]);
-	}
-	
-	
-	pthread_mutex_unlock(&queue_lock);
+
 	return proc;
-
-
 }
 
 void put_mlq_proc(struct pcb_t *proc)
@@ -149,16 +150,14 @@ struct pcb_t *get_proc(void)
 	 * Remember to use lock to protect the queue.
 	 * */
 	pthread_mutex_lock(&queue_lock);
-	if (empty(&ready_queue))
-	{
-		while (!empty(&run_queue))
-		{
-			enqueue(&ready_queue, dequeue(&run_queue));
-		}
-	}
-	proc = dequeue(&ready_queue);
-	pthread_mutex_unlock(&queue_lock);
 
+	if (empty(&ready_queue))
+		proc = dequeue(&run_queue);
+
+	else
+		proc = dequeue(&ready_queue);
+
+	pthread_mutex_unlock(&queue_lock);
 	return proc;
 }
 
