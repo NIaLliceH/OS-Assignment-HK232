@@ -183,7 +183,6 @@ int clear_pgn_node(struct pcb_t * proc , int pgn){
     temp = temp->pg_next;
   }
 
-  
   //Free the node if it's found in the loop
   if (temp != NULL) {
     temp->pg_next = NULL;
@@ -339,7 +338,6 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     /* Copy target frame from swap to mem */
     caller->active_mswp = caller->mswp[swapType];
     __swap_cp_page(caller->active_mswp, swapOff, caller->mram, vicfpn);
-
     //Set the swap info bits of victim page entry
     pte_set_swap(&mm->pgd[vicpgn], swapIndex, vicSwapOff);
 
