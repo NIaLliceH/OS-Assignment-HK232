@@ -146,16 +146,23 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
     else
     { // ERROR CODE of obtaining somes but not enough frames
       //Try to find a victim page of the same process to swap out
-      int failed = -1;
       int vicpgn = -1, vicfpn = -1, vicSwapOff = -1;
 
       if (find_victim_page(caller->mm, &vicpgn) < 0){
-        failed = 1;
+        struct framephy_struct *freefp_str;
+        while (newfp_str != NULL){
+          MEMPHY_put_freefp(caller->active_mswp, newfp_str->fpn);
+          
+          freefp_str = newfp_str;
+          newfp_str = newfp_str->fp_next;
+          free(freefp_str);
+        }
+        return -3000;
       }
       
       int swapIndex = 0;
       //Find a suitable frame in all swap to perform swap out
-      for (; swapIndex < PAGING_MAX_MMSWP && failed < 0; ++swapIndex){
+      for (; swapIndex < PAGING_MAX_MMSWP; ++swapIndex){
         caller->active_mswp = (struct memphy_struct *)(caller->mswp + swapIndex);
         MEMPHY_get_freefp(caller->active_mswp, &vicSwapOff);
         if (vicSwapOff >= 0) break;
@@ -163,19 +170,10 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
 
       //No frame in all swaps, get fail
       if (vicSwapOff < 0){
-        failed = 1;
-      }
-
-      //All effort failed
-      if (failed > 0){
-        //Put back the victim pgn if found
-        if (vicpgn >= 0)
-          enlist_pgn_node(&caller->mm->fifo_pgn, vicpgn);
-        //OR
-
-        //Put back the allocated frames
         struct framephy_struct *freefp_str;
         while (newfp_str != NULL){
+          MEMPHY_put_freefp(caller->active_mswp, newfp_str->fpn);
+          
           freefp_str = newfp_str;
           newfp_str = newfp_str->fp_next;
           free(freefp_str);
@@ -194,7 +192,7 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
       vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 
       //Swap out to the RECENTLY active swap
-      printf("--------------->Active swap id: %d\n", swapIndex);
+      printf("-------------__>Active swap id: %d\n", swapIndex);
       __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, vicSwapOff);
 
       pte_set_swap(&caller->mm->pgd[vicpgn], swapIndex, vicSwapOff);
@@ -395,7 +393,7 @@ int print_list_pgn(struct pgn_t *ip)
        printf("va[%d]-\n",ip->pgn);
        ip = ip->pg_next;
    }
-   printf("n");
+   printf("\n");
    return 0;
 }
 

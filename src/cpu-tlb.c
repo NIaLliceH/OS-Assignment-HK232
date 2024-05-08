@@ -18,11 +18,13 @@
 #ifdef CPU_TLB
 #include "cpu-tlbcache.h"
 
-#include <pthread.h>
-///LOCKS
-static pthread_mutex_t tlb_lock;
-///
 
+#ifdef SYNCH
+  #include <pthread.h>
+  ///LOCKS
+  static pthread_mutex_t tlb_lock;
+  ///
+#endif
 int tlb_change_all_page_tables_of(struct pcb_t *proc,  struct memphy_struct * mp)
 {
   /* TODO update all page table directory info 
@@ -46,8 +48,10 @@ int tlb_flush_tlb_of(struct pcb_t *proc, struct memphy_struct * mp)
  */
 int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 {
-  pthread_mutex_lock(&tlb_lock);
 
+#ifdef SYNCH
+  pthread_mutex_lock(&tlb_lock);
+#endif
   #ifdef TLB_DUMP
     printf("----- TLB ALLOC ----- PID: %d PC: %d-----\n", proc->pid, proc->pc);
   #endif
@@ -62,7 +66,9 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
 
   /* By default using vmaid = 0 */
   if (__alloc(proc, 0, reg_index, size, &addr) != 0){
+  #ifdef SYNCH
     pthread_mutex_unlock(&tlb_lock);
+  #endif
     return -1;
   }
 
@@ -71,7 +77,9 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
   struct vm_area_struct *cur_vma = get_vma_by_num(proc->mm, 0);
   if(currg == NULL || cur_vma == NULL) /* Invalid memory identify */
   {
-    pthread_mutex_unlock(&tlb_lock);
+    #ifdef SYNCH
+      pthread_mutex_unlock(&tlb_lock);
+    #endif
     return -1;
   }
 
@@ -90,7 +98,9 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
   for (; pgit < pgn_count; ++pgit){
 
     if (pg_getpage(proc->mm, pgn + pgit, &frmnum, proc) != 0){
-      pthread_mutex_unlock(&tlb_lock);
+      #ifdef SYNCH
+        pthread_mutex_unlock(&tlb_lock);
+      #endif
       return -1;
     }
 
@@ -98,7 +108,9 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
       #ifdef TLB_DUMP
         printf("TLB page fault!:\n");
       #endif
-      pthread_mutex_unlock(&tlb_lock);
+      #ifdef SYNCH
+        pthread_mutex_unlock(&tlb_lock);
+      #endif
       return -1;
     }
 
@@ -107,7 +119,9 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
     #endif
 
     if (tlb_cache_write(proc->tlb, proc->pid, pgn + pgit, frmnum) != 0){
-      pthread_mutex_unlock(&tlb_lock);
+      #ifdef SYNCH
+        pthread_mutex_unlock(&tlb_lock);
+      #endif
       return -1;
     }
   }
@@ -123,7 +137,9 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
     MEMPHY_dump(proc->mram);
   #endif
 
+#ifdef SYNCH
   pthread_mutex_unlock(&tlb_lock);
+#endif
   return 0;
 }
 
@@ -134,7 +150,9 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
  */
 int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
 {
-  pthread_mutex_lock(&tlb_lock);
+  #ifdef SYNCH
+    pthread_mutex_lock(&tlb_lock);
+  #endif
   #ifdef TLB_DUMP
     printf("----- TLB FREE ----- PID: %d PC: %d-----\n", proc->pid, proc->pc);
   #endif
@@ -182,7 +200,9 @@ int tlbfree_data(struct pcb_t *proc, uint32_t reg_index)
     MEMPHY_dump(proc->mram);
   #endif
 
+#ifdef SYNCH
   pthread_mutex_unlock(&tlb_lock);
+#endif
 
   return 0;
 }
@@ -220,7 +240,9 @@ int tlbread(struct pcb_t * proc, uint32_t source,
       printf("read region=%d offset=%d\n", source, offset); 
       printf("Address out of range!\n");
     #endif
-    pthread_mutex_unlock(&tlb_lock);
+#ifdef SYNCH
+  pthread_mutex_unlock(&tlb_lock);
+#endif
     return -1;
   }
 
@@ -229,7 +251,9 @@ int tlbread(struct pcb_t * proc, uint32_t source,
 
   //get frmnum
   if (tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum) != 0){
-    pthread_mutex_unlock(&tlb_lock);
+#ifdef SYNCH
+  pthread_mutex_unlock(&tlb_lock);
+#endif
     return -1;
   }
   ///
@@ -260,7 +284,9 @@ int tlbread(struct pcb_t * proc, uint32_t source,
       #ifdef IODUMP
         printf("Page fault!!!\n");
       #endif
-      pthread_mutex_unlock(&tlb_lock);
+      #ifdef SYNCH
+        pthread_mutex_unlock(&tlb_lock);
+      #endif
       return -1;
     }
     /* TODO update TLB CACHED with frame num of recent accessing page(s)*/
@@ -297,7 +323,9 @@ int tlbread(struct pcb_t * proc, uint32_t source,
 int tlbwrite(struct pcb_t * proc, BYTE data,
              uint32_t destination, uint32_t offset)
 {
-  pthread_mutex_lock(&tlb_lock);
+  #ifdef SYNCH
+    pthread_mutex_lock(&tlb_lock);
+  #endif
   #ifdef TLB_DUMP
     printf("----- TLB WRITE ----- PID: %d PC: %d-----\n", proc->pid, proc->pc);
   #endif
@@ -322,7 +350,9 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
       printf("write region=%d offset=%d\n", destination, offset); 
       printf("Address out of range!\n");
     #endif
-    pthread_mutex_unlock(&tlb_lock);
+    #ifdef SYNCH
+      pthread_mutex_unlock(&tlb_lock);
+    #endif  
     return -1;
   }
 
@@ -331,7 +361,9 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
 
   //get frmnum
   if (tlb_cache_read(proc->tlb, proc->pid, pgn, &frmnum) != 0){
-    pthread_mutex_unlock(&tlb_lock);
+    #ifdef SYNCH
+      pthread_mutex_unlock(&tlb_lock);
+    #endif
     return -1;
   }
   ///
@@ -359,7 +391,9 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   {
     //TLB MISS, GET DATA THROUGH PAGE TABLE
     if (pg_getpage(proc->mm, pgn, &frmnum, proc) != 0){
-      pthread_mutex_unlock(&tlb_lock);
+      #ifdef SYNCH
+        pthread_mutex_unlock(&tlb_lock);
+      #endif  
       return -1;
     }
 
@@ -367,7 +401,9 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
       #ifdef TLB_DUMP
         printf("TLB page fault!:\n");
       #endif
-      pthread_mutex_unlock(&tlb_lock);
+      #ifdef SYNCH
+        pthread_mutex_unlock(&tlb_lock);
+      #endif
       return -1;
     }
 
@@ -388,7 +424,9 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
     MEMPHY_dump(proc->mram);
   #endif
 
-  pthread_mutex_unlock(&tlb_lock);
+  #ifdef SYNCH
+    pthread_mutex_unlock(&tlb_lock);
+  #endif
   return 0;
 }
 
