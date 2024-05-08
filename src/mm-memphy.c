@@ -97,16 +97,18 @@ int MEMPHY_seq_write(struct memphy_struct * mp, int addr, BYTE value)
  */
 int MEMPHY_write(struct memphy_struct * mp, int addr, BYTE data)
 {
-   pthread_mutex_lock(&memphy_lock);
-   if (mp == NULL)
+   // pthread_mutex_lock(&memphy_lock);
+   if (mp == NULL){
+      // pthread_mutex_unlock(&memphy_lock);
      return -1;
+   }
 
    if (mp->rdmflg)
       mp->storage[addr] = data;
    else /* Sequential access device */
       return MEMPHY_seq_write(mp, addr, data);
    
-   pthread_mutex_unlock(&memphy_lock);
+   // pthread_mutex_unlock(&memphy_lock);
    return 0;
 }
 
@@ -144,11 +146,15 @@ int MEMPHY_format(struct memphy_struct *mp, int pagesz)
 
 int MEMPHY_get_freefp(struct memphy_struct *mp, int *retfpn)
 {
-   pthread_mutex_lock(&memphy_lock);
+   // pthread_mutex_lock(&memphy_lock);
+   if (mp == NULL || mp->maxsz <= 0) return -1;
+
    struct framephy_struct *fp = mp->free_fp_list;
 
-   if (fp == NULL)
+   if (fp == NULL){
+      // pthread_mutex_unlock(&memphy_lock);
      return -1;
+   }
 
    *retfpn = fp->fpn;
    mp->free_fp_list = fp->fp_next;
@@ -157,7 +163,7 @@ int MEMPHY_get_freefp(struct memphy_struct *mp, int *retfpn)
     * No garbage collector acting then it not been released
     */
    free(fp);
-   pthread_mutex_unlock(&memphy_lock);
+   // pthread_mutex_unlock(&memphy_lock);
    return 0;
 }
 
@@ -180,7 +186,7 @@ int MEMPHY_dump(struct memphy_struct * mp)
 
 int MEMPHY_put_freefp(struct memphy_struct *mp, int fpn)
 {
-   pthread_mutex_lock(&memphy_lock);
+   // pthread_mutex_lock(&memphy_lock);
    struct framephy_struct *fp = mp->free_fp_list;
    struct framephy_struct *newnode = malloc(sizeof(struct framephy_struct));
 
@@ -189,7 +195,7 @@ int MEMPHY_put_freefp(struct memphy_struct *mp, int fpn)
    newnode->fp_next = fp;
    mp->free_fp_list = newnode;
 
-   pthread_mutex_unlock(&memphy_lock);
+   // pthread_mutex_unlock(&memphy_lock);
    return 0;
 }
 
@@ -201,8 +207,13 @@ int MEMPHY_put_freefp(struct memphy_struct *mp, int fpn)
 int init_memphy(struct memphy_struct *mp, int max_size, int randomflg)
 {
    pthread_mutex_init(&memphy_lock, NULL);
+
    mp->storage = (BYTE *)malloc(max_size*sizeof(BYTE));
    mp->maxsz = max_size;
+
+   for (int i = 0; i < max_size; ++i){
+      mp->storage[i] = 0;
+   }
 
    MEMPHY_format(mp,PAGING_PAGESZ);
 

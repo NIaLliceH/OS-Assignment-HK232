@@ -358,9 +358,14 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   if (frmnum < 0)
   {
     //TLB MISS, GET DATA THROUGH PAGE TABLE
-    if (pg_getpage(proc->mm, pgn, &frmnum, proc) != 0 || frmnum < 0){
-      #ifdef IODUMP
-        printf("Page fault!!!\n");
+    if (pg_getpage(proc->mm, pgn, &frmnum, proc) != 0){
+      pthread_mutex_unlock(&tlb_lock);
+      return -1;
+    }
+
+    if (frmnum < 0){
+      #ifdef TLB_DUMP
+        printf("TLB page fault!:\n");
       #endif
       pthread_mutex_unlock(&tlb_lock);
       return -1;

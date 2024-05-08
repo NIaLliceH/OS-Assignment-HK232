@@ -8,6 +8,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#ifdef CPU_TLB
+#include "cpu-tlbcache.h"
+#endif
+
 /* 
  * init_pte - Initialize PTE entry
  */
@@ -130,7 +134,7 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
   int pgit, fpn;
   //struct framephy_struct *newfp_str;
 
-struct framephy_struct *newfp_str = NULL;
+  struct framephy_struct *newfp_str = NULL;
 
   for (pgit = 0; pgit < req_pgnum; pgit++)
   {
@@ -141,29 +145,59 @@ struct framephy_struct *newfp_str = NULL;
     }
     else
     { // ERROR CODE of obtaining somes but not enough frames
-      int vicpgn, swpfpn;
-      if (find_victim_page(caller->mm, &vicpgn) == -1 || MEMPHY_get_freefp(caller->active_mswp, &swpfpn) == -1)
-      {
-        if (*frm_lst == NULL)
-        {
-          return -1;
-        }
-        else
-        {
-          struct framephy_struct *freefp_str;
-          while (*frm_lst != NULL)
-          {
-            freefp_str = *frm_lst;
-            *frm_lst = (*frm_lst)->fp_next;
-            free(freefp_str);
-          }
-          return -3000;
-        }
+      //Try to find a victim page of the same process to swap out
+      int failed = -1;
+      int vicpgn = -1, vicfpn = -1, vicSwapOff = -1;
+
+      if (find_victim_page(caller->mm, &vicpgn) < 0){
+        failed = 1;
       }
+      
+      int swapIndex = 0;
+      //Find a suitable frame in all swap to perform swap out
+      for (; swapIndex < PAGING_MAX_MMSWP && failed < 0; ++swapIndex){
+        caller->active_mswp = (struct memphy_struct *)(caller->mswp + swapIndex);
+        MEMPHY_get_freefp(caller->active_mswp, &vicSwapOff);
+        if (vicSwapOff >= 0) break;
+      }
+
+      //No frame in all swaps, get fail
+      if (vicSwapOff < 0){
+        failed = 1;
+      }
+
+      //All effort failed
+      if (failed > 0){
+        //Put back the victim pgn if found
+        if (vicpgn >= 0)
+          enlist_pgn_node(&caller->mm->fifo_pgn, vicpgn);
+        //OR
+
+        //Put back the allocated frames
+        struct framephy_struct *freefp_str;
+        while (newfp_str != NULL){
+          freefp_str = newfp_str;
+          newfp_str = newfp_str->fp_next;
+          free(freefp_str);
+        }
+        return -3000;
+      }
+
+      //Victim page found, swapping out
+
+      #ifdef CPU_TLB
+        //Invalidate the entry of the victim page on tlb
+        tlb_cache_invalidate(caller->tlb, caller->pid, vicpgn);
+      #endif
+
       uint32_t vicpte = caller->mm->pgd[vicpgn];
-      int vicfpn = PAGING_FPN(vicpte);
-      __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, swpfpn);
-      pte_set_swap(&caller->mm->pgd[vicpgn], 0, swpfpn);
+      vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
+
+      //Swap out to the RECENTLY active swap
+      printf("-------------__>Active swap id: %d\n", swapIndex);
+      __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, vicSwapOff);
+
+      pte_set_swap(&caller->mm->pgd[vicpgn], swapIndex, vicSwapOff);
       newfp_str->fpn = vicfpn;
     }
     newfp_str->fp_next = *frm_lst;
@@ -225,6 +259,9 @@ int vm_map_ram(struct pcb_t *caller, int astart, int aend, int mapstart, int inc
 int __swap_cp_page(struct memphy_struct *mpsrc, int srcfpn,
                 struct memphy_struct *mpdst, int dstfpn) 
 {
+  #ifdef MMDBG
+    printf("Swapping frames: %d -> %d\n", srcfpn, dstfpn);
+  #endif
   int cellidx;
   int addrsrc,addrdst;
   for(cellidx = 0; cellidx < PAGING_PAGESZ; cellidx++)
@@ -234,6 +271,9 @@ int __swap_cp_page(struct memphy_struct *mpsrc, int srcfpn,
 
     BYTE data;
     MEMPHY_read(mpsrc, addrsrc, &data);
+    // #ifdef MMDBG
+    //   printf("Transfering data: %d\n", data);
+    // #endif
     MEMPHY_write(mpdst, addrdst, data);
   }
 

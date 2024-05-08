@@ -8,7 +8,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
-static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
+// static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
+
+
+#ifdef CPU_TLB
+#include "cpu-tlbcache.h"
+#endif
 
 #ifdef MM_PAGING
 /*enlist_vm_freerg_list - add new rg to freerg_list
@@ -83,7 +88,7 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  */
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr)
 {
-  pthread_mutex_unlock(&mmvm_lock);
+  // pthread_mutex_lock(&mmvm_lock);
   /*Allocate at the toproof */
 							  
   struct vm_rg_struct rgnode;
@@ -102,12 +107,14 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
     if (vm_map_ram(caller, rgnode.rg_start, rgnode.rg_end, rgnode.rg_start, incnumpage, newrg) < 0)
     {
-      pthread_mutex_unlock(&mmvm_lock);
+      // pthread_mutex_unlock(&mmvm_lock);
+      //Cant map pages and frames -> Put the region back
+      enlist_vm_freerg_list(caller->mm, &rgnode);
       return -1;
     }
 
     *alloc_addr = rgnode.rg_start;
-		pthread_mutex_unlock(&mmvm_lock);
+		// pthread_mutex_unlock(&mmvm_lock);
     return 0;
   }
 
@@ -123,7 +130,9 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   /* TODO INCREASE THE LIMIT
    * inc_vma_limit(caller, vmaid, inc_sz)
    */
-  inc_vma_limit(caller, vmaid, inc_sz);
+  if (inc_vma_limit(caller, vmaid, inc_sz) < 0){
+    return -1;
+  }
 
   /*Successful increase limit */
   caller->mm->symrgtbl[rgid].rg_start = old_sbrk;
@@ -140,7 +149,7 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
     enlist_vm_freerg_list(caller->mm, rg_free);
   }
 
-  pthread_mutex_unlock(&mmvm_lock);
+  // pthread_mutex_unlock(&mmvm_lock);
 
   return 0;
 }
@@ -153,21 +162,27 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
  *
  */
 int clear_pgn_node(struct pcb_t * proc , int pgn){
-  struct pgn_t* newlist = NULL;
+  struct pgn_t* prev = NULL;
   struct pgn_t* temp = proc->mm->fifo_pgn;
   if(temp==NULL) return -1;
+
   while(temp != NULL){
     if(temp->pgn == pgn){
-      if(newlist == NULL){
+      //Found the node to delete
+      if(prev == NULL) 
         proc->mm->fifo_pgn = temp->pg_next;
-      }
-      else{
-        newlist->pg_next = temp->pg_next;
-      }
-    }
-    newlist = temp;
+      else 
+        prev->pg_next = temp->pg_next;
+      break;
+    } 
+    prev = temp;
     temp = temp->pg_next;
   }
+
+  //Free the node if it's found in the loop
+  if (temp != NULL) 
+    free(temp);
+
   return 0;
 }
 int __free(struct pcb_t *caller, int vmaid, int rgid)
@@ -177,12 +192,12 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
   if (rgid < 0 || rgid > PAGING_MAX_SYMTBL_SZ)
     return -1;
 
-  pthread_mutex_lock(&mmvm_lock);
+  // pthread_mutex_lock(&mmvm_lock);
   /* TODO: Manage the collect freed region to freerg_list */
   struct vm_rg_struct *temp = get_symrg_byid(caller->mm, rgid);
   if (temp->rg_end == 0)
   {
-    pthread_mutex_unlock(&mmvm_lock);
+    // pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
   int inc_sz = temp->rg_end - temp->rg_start;
@@ -207,7 +222,7 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
   temp->rg_next = NULL;
   /*enlist the obsoleted memory region */
   enlist_vm_freerg_list(caller->mm, rgnode);
-  pthread_mutex_unlock(&mmvm_lock);
+  // pthread_mutex_unlock(&mmvm_lock);
   return 0;
 }
 
@@ -246,47 +261,109 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 {
   uint32_t pte = mm->pgd[pgn];
 
-  if (!PAGING_PAGE_PRESENT(pte))
-  { /* Page is not online, make it actively living */
-    int vicpgn, swpfpn;
-    int vicfpn;
-    uint32_t vicpte;
-    int tgtfpn = PAGING_SWP(pte); // the target frame storing our variable
+  *fpn = -1;
 
-    /* TODO: Play with your paging theory here */
+  //Page not allocated
+  if (!PAGING_PAGE_PRESENT(pte))
+    return -1;
+
+  if (GETVAL(pte, PAGING_PTE_SWAPPED_MASK, 0) > 0)
+  { 
+    /* Page is not online, make it actively living */
+
+    //Id of swap
+    int swapType = GETVAL(pte, PAGING_PTE_SWPTYP_MASK, PAGING_PTE_SWPTYP_LOBIT);
+    //Offset of the frame on swap
+    int swapOff = PAGING_SWP(pte);
+    
+    //First try to find a free frame on RAM to swap in
+    if (MEMPHY_get_freefp(caller->mram, fpn) == 0){
+      //Copy from swap to the newly allocated frame in RAM
+      caller->active_mswp = (struct memphy_struct *)(caller->mswp + swapType);
+      __swap_cp_page(caller->active_mswp, swapOff, caller->mram, *fpn);
+
+      //Set the found fpn to the needed pte
+      pte_set_fpn(&mm->pgd[pgn], *fpn);
+
+      //Set the offset on swap as free
+      MEMPHY_put_freefp(caller->active_mswp, swapOff);
+
+      //Put pgn back to fifo_pgn list
+      enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
+      //Frame is also found, return right away;D
+      return 0;
+    }
+
     /* Find victim page */
-    if (find_victim_page(caller->mm, &vicpgn) != 0)
-    {
-      return -1;
+     int failed = -1;
+    int vicpgn = -1, vicSwapOff = -1; 
+    int vicfpn = -1;
+    uint32_t vicpte;
+    if (find_victim_page(caller->mm, &vicpgn) != 0){
+      failed = 1;
     }
-    /* Get free frame in MEMSWP */
-    if (MEMPHY_get_freefp(caller->active_mswp, &swpfpn) != 0)
-    {
-      return -1;
-    }
+
     vicpte = mm->pgd[vicpgn];
-    vicfpn = vicpte & PAGING_PTE_FPN_MASK;
+    vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
+  
+    int swapIndex = 0;
+    //Find a suitable frame in all swap to perform swap out
+    for (; swapIndex < PAGING_MAX_MMSWP && failed < 0; ++swapIndex){
+      caller->active_mswp = (struct memphy_struct *)(caller->mswp + swapIndex);
+      MEMPHY_get_freefp(caller->active_mswp, &vicSwapOff);
+      if (vicSwapOff >= 0) break;
+    }
+
+    //No frame in all swaps, get fail
+    if (vicSwapOff < 0){
+      failed = 1;
+    }
+
+    //1 of the 2 above failed, give back resources and return -1
+    //All effort failed
+    if (failed >= 0){
+      //Put back the victim pgn if found
+      if (vicpgn >= 0)
+        enlist_pgn_node(&caller->mm->fifo_pgn, vicpgn);
+      //OR
+
+      //Put back the allocated frame
+      if (vicSwapOff >= 0) {
+        MEMPHY_put_freefp(caller->active_mswp, vicSwapOff);
+      }
+      return -1;
+    }
+    
+    //Swapping out
+    #ifdef CPU_TLB
+      //Invalidate the entry of the victim page on tlb
+      tlb_cache_invalidate(caller->tlb, caller->pid, vicpgn);
+    #endif
 
     /* Do swap frame from MEMRAM to MEMSWP and vice versa*/
-    /* Copy victim frame to swap */
-    __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, swpfpn);
+    /* Copy victim frame to RECENTLY active swap from the loop */
+    __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, vicSwapOff);
+    
     /* Copy target frame from swap to mem */
-    __swap_cp_page(caller->active_mswp, tgtfpn, caller->mram, vicfpn);
+    caller->active_mswp = caller->mswp[swapType];
+    __swap_cp_page(caller->active_mswp, swapOff, caller->mram, vicfpn);
 
-    // print_pgtbl(caller, 0, -1);
-    // printf("setaaaaaaaaaaaaaaaa%d: %d: %08x\n", vicpgn, swpfpn, mm->pgd[vicpgn]);
+    //Set the swap info bits of victim page entry
+    pte_set_swap(&mm->pgd[vicpgn], swapIndex, vicSwapOff);
 
-    pte_set_swap(&mm->pgd[vicpgn], 0, swpfpn);
-
-    // print_pgtbl(caller, 0, -1);
-
-    /* Update its online status of the target page */
+    //Set the frame number to the needed pte
     pte_set_fpn(&mm->pgd[pgn], vicfpn);
 
+    //Update pte after swapping-in
+    pte = mm->pgd[pgn];
+
+    //Doenst store swapped out pgn in fifo_pgn list
+    //So put it back in after swapping-in
     enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
   }
 
-  *fpn = pte & PAGING_PTE_FPN_MASK;
+  *fpn = GETVAL(pte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
+
   return 0;
 }
 
@@ -565,20 +642,26 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
  */
 int find_victim_page(struct mm_struct *mm, int *retpgn) 
 {
-  struct pgn_t *pg = mm->fifo_pgn;
-
-  /* TODO: Implement the theorical mechanism to find the victim page */
- if (!pg)
-  {
+  if (mm == NULL || mm->fifo_pgn == NULL){
     return -1;
   }
+  //Fifo_pgn doesnt store swapped pages, no need for special checks
+  struct pgn_t *pg = mm->fifo_pgn;
+
+  *retpgn = -1;
+
+  /* TODO: Implement the theorical mechanism to find the victim page */
   struct pgn_t *prev = NULL;
-  while (pg->pg_next)
+  while (pg && pg->pg_next)
   {
     prev = pg;
     pg = pg->pg_next;
   }
-  *retpgn = pg->pgn;
+
+  if (pg)
+    *retpgn = pg->pgn;
+  else
+    return -1;
   
   if (prev) prev->pg_next = NULL;
   
