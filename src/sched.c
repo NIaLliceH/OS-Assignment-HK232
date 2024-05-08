@@ -6,7 +6,10 @@
 
 static struct queue_t ready_queue;
 static struct queue_t run_queue;
+
+#ifdef SYNCH
 static pthread_mutex_t queue_lock;
+#endif
 
 #ifdef MLQ_SCHED
 static struct queue_t mlq_ready_queue[MAX_PRIO];
@@ -37,7 +40,9 @@ void init_scheduler(void)
 #endif
 	ready_queue.size = 0;
 	run_queue.size = 0;
+#ifdef SYNCH
 	pthread_mutex_init(&queue_lock, NULL);
+#endif
 }
 
 #ifdef MLQ_SCHED
