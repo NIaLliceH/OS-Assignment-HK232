@@ -95,6 +95,8 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   int inc_sz = PAGING_PAGE_ALIGNSZ(size);
 
+  struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
+
   if (get_free_vmrg_area(caller, vmaid, inc_sz, &rgnode) == 0)
   {
     caller->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
@@ -105,23 +107,25 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
     int inc_amt = PAGING_PAGE_ALIGNSZ(inc_sz);
     int incnumpage = inc_amt / PAGING_PAGESZ;
 
-    if (vm_map_ram(caller, rgnode.rg_start, rgnode.rg_end, rgnode.rg_start, incnumpage, newrg) < 0)
+    if (vm_map_ram(caller, cur_vma->vm_start, cur_vma->vm_end, rgnode.rg_start, incnumpage, newrg) < 0)
     {
       // pthread_mutex_unlock(&mmvm_lock);
       //Cant map pages and frames -> Put the region back
       enlist_vm_freerg_list(caller->mm, &rgnode);
+      caller->mm->symrgtbl[rgid].rg_start 
+        = caller->mm->symrgtbl[rgid].rg_end = 0;
+      free(newrg);
       return -1;
     }
 
     *alloc_addr = rgnode.rg_start;
+    free(newrg);
 		// pthread_mutex_unlock(&mmvm_lock);
     return 0;
   }
 
   /* TODO get_free_vmrg_area FAILED handle the region management (Fig.6)*/
 
-  /*Attempt to increate limit to get space */
-  struct vm_area_struct *cur_vma = get_vma_by_num(caller->mm, vmaid);
   // int inc_limit_ret
   int old_sbrk;
 
@@ -141,10 +145,10 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   *alloc_addr = old_sbrk;
 
   struct vm_area_struct *remain_rg = get_vma_by_num(caller->mm, vmaid);
-  if (old_sbrk + size < remain_rg->sbrk)
+  if (old_sbrk + inc_sz < remain_rg->sbrk)
   {
     struct vm_rg_struct *rg_free = malloc(sizeof(struct vm_rg_struct));
-    rg_free->rg_start = old_sbrk + size;
+    rg_free->rg_start = old_sbrk + inc_sz;
     rg_free->rg_end = remain_rg->sbrk;
     enlist_vm_freerg_list(caller->mm, rg_free);
   }
@@ -179,9 +183,12 @@ int clear_pgn_node(struct pcb_t * proc , int pgn){
     temp = temp->pg_next;
   }
 
+  
   //Free the node if it's found in the loop
-  if (temp != NULL) 
+  if (temp != NULL) {
+    temp->pg_next = NULL;
     free(temp);
+  }
 
   return 0;
 }
@@ -295,12 +302,12 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     }
 
     /* Find victim page */
-     int failed = -1;
+     int failed = 0;
     int vicpgn = -1, vicSwapOff = -1; 
     int vicfpn = -1;
     uint32_t vicpte;
-    if (find_victim_page(caller->mm, &vicpgn) != 0){
-      failed = 1;
+    if (find_victim_page(caller->mm, &vicpgn) < 0){
+      return -1;
     }
 
     vicpte = mm->pgd[vicpgn];
@@ -316,24 +323,9 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     //No frame in all swaps, get fail
     if (vicSwapOff < 0){
-      failed = 1;
-    }
-
-    //1 of the 2 above failed, give back resources and return -1
-    //All effort failed
-    if (failed >= 0){
-      //Put back the victim pgn if found
-      if (vicpgn >= 0)
-        enlist_pgn_node(&caller->mm->fifo_pgn, vicpgn);
-      //OR
-
-      //Put back the allocated frame
-      if (vicSwapOff >= 0) {
-        MEMPHY_put_freefp(caller->active_mswp, vicSwapOff);
-      }
       return -1;
     }
-    
+
     //Swapping out
     #ifdef CPU_TLB
       //Invalidate the entry of the victim page on tlb
@@ -628,9 +620,12 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
   cur_vma->vm_end += inc_sz;
   cur_vma->sbrk += inc_sz;
   if (vm_map_ram(caller, area->rg_start, area->rg_end, 
-                    old_end, incnumpage , newrg) < 0)
-    return -1; /* Map the memory to MEMRAM */
+                    old_end, incnumpage , newrg) < 0){
+      free(newrg);
+      return -1; /* Map the memory to MEMRAM */
 
+                    }
+  free(newrg);
   return 0;
 
 }
@@ -664,7 +659,10 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
     return -1;
   
   if (prev) prev->pg_next = NULL;
-  
+  else{
+    mm->fifo_pgn = NULL;
+  }
+  pg->pg_next = NULL;
   free(pg);
 
   return 0;
