@@ -8,6 +8,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#ifdef CPU_TLB
+#include "cpu-tlbcache.h"
+#endif
+
 /* 
  * init_pte - Initialize PTE entry
  */
@@ -142,19 +146,19 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
     else
     { // ERROR CODE of obtaining somes but not enough frames
       //Try to find a victim page of the same process to swap out
-      int failed = 0;
-      int vicpgn, vicfpn, vicSwapOff;
+      int failed = -1;
+      int vicpgn = -1, vicfpn = -1, vicSwapOff = -1;
 
-      if (find_victim_page(caller->mm, &vicpgn) == -1){
+      if (find_victim_page(caller->mm, &vicpgn) < 0){
         failed = 1;
       }
       
       int swapIndex = 0;
       //Find a suitable frame in all swap to perform swap out
-      for (; swapIndex < 4 && failed == 0; ++swapIndex){
-        caller->active_mswp = caller->mswp[swapIndex];
+      for (; swapIndex < PAGING_MAX_MMSWP && failed < 0; ++swapIndex){
+        caller->active_mswp = (struct memphy_struct *)(caller->mswp + swapIndex);
         MEMPHY_get_freefp(caller->active_mswp, &vicSwapOff);
-        if (vicSwapOff != -1) break;
+        if (vicSwapOff >= 0) break;
       }
 
       //No frame in all swaps, get fail
@@ -164,6 +168,12 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
 
       //All effort failed
       if (failed > 0){
+        //Put back the victim pgn if found
+        if (vicpgn != -1)
+          enlist_pgn_node(&caller->mm->fifo_pgn, vicpgn);
+        //OR
+
+        //Put back the allocated frames
         struct framephy_struct *freefp_str;
         while (*frm_lst != NULL){
           freefp_str = *frm_lst;
@@ -184,6 +194,7 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
       vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 
       //Swap out to the RECENTLY active swap
+      printf("-------------__>Active swap id: %d\n", swapIndex);
       __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, vicSwapOff);
 
       pte_set_swap(&caller->mm->pgd[vicpgn], swapIndex, vicSwapOff);
@@ -248,6 +259,9 @@ int vm_map_ram(struct pcb_t *caller, int astart, int aend, int mapstart, int inc
 int __swap_cp_page(struct memphy_struct *mpsrc, int srcfpn,
                 struct memphy_struct *mpdst, int dstfpn) 
 {
+  #ifdef MMDBG
+    printf("Swapping frames: %d -> %d\n", srcfpn, dstfpn);
+  #endif
   int cellidx;
   int addrsrc,addrdst;
   for(cellidx = 0; cellidx < PAGING_PAGESZ; cellidx++)
@@ -257,6 +271,9 @@ int __swap_cp_page(struct memphy_struct *mpsrc, int srcfpn,
 
     BYTE data;
     MEMPHY_read(mpsrc, addrsrc, &data);
+    #ifdef MMDBG
+      printf("Transfering data: %d\n", data);
+    #endif
     MEMPHY_write(mpdst, addrdst, data);
   }
 

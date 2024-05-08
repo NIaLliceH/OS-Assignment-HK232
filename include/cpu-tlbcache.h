@@ -17,25 +17,25 @@ int init_tlbmemphy(struct memphy_struct *mp, int max_size);
 /* TLB Entry BIT */
 //FILLER BITS TO GET TO 64 BITS PER ENTRY
 #define FREE_HIBIT 63
-#define FREE_LOBIT 59
+#define FREE_LOBIT 60
 
 //ENTRY IS BEING USED OR NOT
-#define VALID_BIT 58
+#define VALID_BIT 59
 
 //UNUSED
 //FOR WRITE-BACK CHECK WHEN ENTRY IS REPLACED
 // #define DIRTY_BIT 58
 
 //FULLY-ASSOC, TAG BIT = PGN BIT = 14
-#define TAG_HIBIT 57
-#define TAG_LOBIT 44
+#define TAG_HIBIT 58
+#define TAG_LOBIT 45
 
 //PID BIT = 32
-#define PID_HIBIT 43
-#define PID_LOBIT 12
+#define PID_HIBIT 44
+#define PID_LOBIT 13
 
 //FRMNUM BIT = 12
-#define FRMNUM_HIBIT 11
+#define FRMNUM_HIBIT 12
 #define FRMNUM_LOBIT 0
 
 //TLB Entry bit-masks

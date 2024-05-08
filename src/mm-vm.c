@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
-static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
+// static pthread_mutex_t mmvm_lock = PTHREAD_MUTEX_INITIALIZER;
 
 
 #ifdef CPU_TLB
@@ -108,6 +108,8 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
     if (vm_map_ram(caller, rgnode.rg_start, rgnode.rg_end, rgnode.rg_start, incnumpage, newrg) < 0)
     {
       // pthread_mutex_unlock(&mmvm_lock);
+      //Cant map pages and frames -> Put the region back
+      enlist_vm_freerg_list(caller->mm, &rgnode);
       return -1;
     }
 
@@ -128,7 +130,9 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
   /* TODO INCREASE THE LIMIT
    * inc_vma_limit(caller, vmaid, inc_sz)
    */
-  inc_vma_limit(caller, vmaid, inc_sz);
+  if (inc_vma_limit(caller, vmaid, inc_sz) < 0){
+    return -1;
+  }
 
   /*Successful increase limit */
   caller->mm->symrgtbl[rgid].rg_start = old_sbrk;
@@ -136,14 +140,14 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, int size, int *alloc_addr
 
   *alloc_addr = old_sbrk;
 
-  // struct vm_area_struct *remain_rg = get_vma_by_num(caller->mm, vmaid);
-  // if (old_sbrk + size < remain_rg->sbrk)
-  // {
-  //   struct vm_rg_struct *rg_free = malloc(sizeof(struct vm_rg_struct));
-  //   rg_free->rg_start = old_sbrk + size;
-  //   rg_free->rg_end = remain_rg->sbrk;
-  //   enlist_vm_freerg_list(caller->mm, rg_free);
-  // }
+  struct vm_area_struct *remain_rg = get_vma_by_num(caller->mm, vmaid);
+  if (old_sbrk + size < remain_rg->sbrk)
+  {
+    struct vm_rg_struct *rg_free = malloc(sizeof(struct vm_rg_struct));
+    rg_free->rg_start = old_sbrk + size;
+    rg_free->rg_end = remain_rg->sbrk;
+    enlist_vm_freerg_list(caller->mm, rg_free);
+  }
 
   // pthread_mutex_unlock(&mmvm_lock);
 
@@ -268,25 +272,16 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
   if (GETVAL(pte, PAGING_PTE_SWAPPED_MASK, 0) > 0)
   { 
     /* Page is not online, make it actively living */
+
+    //Id of swap
     int swapType = GETVAL(pte, PAGING_PTE_SWPTYP_MASK, PAGING_PTE_SWPTYP_LOBIT);
-    // the target frame storing our variable
+    //Offset of the frame on swap
     int swapOff = PAGING_SWP(pte);
-
-    /* Find victim page */
-    int vicpgn, vicSwapOff; 
-    int vicfpn;
-    uint32_t vicpte;
-    if (find_victim_page(caller->mm, &vicpgn) != 0)
-    {
-      //All pages of current process are swapped out/not allocated, cant find a victim page
-      //Therefore, try to find a free frame in RAM
-      
-      if (MEMPHY_get_freefp(caller->mram, fpn) != 0){
-        //No frame left in RAM, get failed
-        return -1;
-      }
-
+    
+    //First try to find a free frame on RAM to swap in
+    if (MEMPHY_get_freefp(caller->mram, fpn) == 0){
       //Copy from swap to the newly allocated frame in RAM
+      caller->active_mswp = caller->mswp[swapType];
       __swap_cp_page(caller->active_mswp, swapOff, caller->mram, *fpn);
 
       //Set the found fpn to the needed pte
@@ -298,15 +293,23 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
       return 0;
     }
 
+    /* Find victim page */
+    int vicpgn, vicSwapOff; 
+    int vicfpn;
+    uint32_t vicpte;
+    if (find_victim_page(caller->mm, &vicpgn) != 0){
+      return -1;
+    }
+
     vicpte = mm->pgd[vicpgn];
     vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
   
     int swapIndex = 0;
     //Find a suitable frame in all swap to perform swap out
-    for (; swapIndex < 4; ++swapIndex){
-      caller->active_mswp = caller->mswp[swapIndex];
+    for (; swapIndex < PAGING_MAX_MMSWP; ++swapIndex){
+      caller->active_mswp = (struct memphy_struct *)(caller->mswp + swapIndex);
       MEMPHY_get_freefp(caller->active_mswp, &vicSwapOff);
-      if (vicSwapOff != -1) break;
+      if (vicSwapOff >= 0) break;
     }
 
     //No frame in all swaps, get fail

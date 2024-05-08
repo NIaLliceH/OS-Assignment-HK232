@@ -147,6 +147,8 @@ int MEMPHY_format(struct memphy_struct *mp, int pagesz)
 int MEMPHY_get_freefp(struct memphy_struct *mp, int *retfpn)
 {
    // pthread_mutex_lock(&memphy_lock);
+   if (mp == NULL || mp->maxsz <= 0) return -1;
+
    struct framephy_struct *fp = mp->free_fp_list;
 
    if (fp == NULL){
@@ -205,8 +207,13 @@ int MEMPHY_put_freefp(struct memphy_struct *mp, int fpn)
 int init_memphy(struct memphy_struct *mp, int max_size, int randomflg)
 {
    pthread_mutex_init(&memphy_lock, NULL);
+
    mp->storage = (BYTE *)malloc(max_size*sizeof(BYTE));
    mp->maxsz = max_size;
+
+   for (int i = 0; i < max_size; ++i){
+      mp->storage[i] = 0;
+   }
 
    MEMPHY_format(mp,PAGING_PAGESZ);
 
