@@ -194,7 +194,7 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
       vicfpn = GETVAL(vicpte, PAGING_PTE_FPN_MASK, PAGING_PTE_FPN_LOBIT);
 
       //Swap out to the RECENTLY active swap
-      printf("-------------__>Active swap id: %d\n", swapIndex);
+      printf("--------------->Active swap id: %d\n", swapIndex);
       __swap_cp_page(caller->mram, vicfpn, caller->active_mswp, vicSwapOff);
 
       pte_set_swap(&caller->mm->pgd[vicpgn], swapIndex, vicSwapOff);
