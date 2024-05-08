@@ -165,19 +165,17 @@ int clear_pgn_node(struct pcb_t * proc , int pgn){
   struct pgn_t* prev = NULL;
   struct pgn_t* temp = proc->mm->fifo_pgn;
   if(temp==NULL) return -1;
+
   while(temp != NULL){
     if(temp->pgn == pgn){
       //Found the node to delete
-      if(prev == NULL){
+      if(prev == NULL) 
         proc->mm->fifo_pgn = temp->pg_next;
-      }
-      else{
+      else 
         prev->pg_next = temp->pg_next;
-      }
       break;
-    } else {
-      prev = temp;
-    }
+    } 
+    prev = temp;
     temp = temp->pg_next;
   }
 
@@ -281,7 +279,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     //First try to find a free frame on RAM to swap in
     if (MEMPHY_get_freefp(caller->mram, fpn) == 0){
       //Copy from swap to the newly allocated frame in RAM
-      caller->active_mswp = caller->mswp[swapType];
+        caller->active_mswp = (struct memphy_struct *)(caller->mswp + swapType);
       __swap_cp_page(caller->active_mswp, swapOff, caller->mram, *fpn);
 
       //Set the found fpn to the needed pte
@@ -294,11 +292,12 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     }
 
     /* Find victim page */
-    int vicpgn, vicSwapOff; 
-    int vicfpn;
+     int failed = -1;
+    int vicpgn = -1, vicSwapOff = -1; 
+    int vicfpn = -1;
     uint32_t vicpte;
     if (find_victim_page(caller->mm, &vicpgn) != 0){
-      return -1;
+      failed = 1;
     }
 
     vicpte = mm->pgd[vicpgn];
@@ -306,7 +305,7 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
   
     int swapIndex = 0;
     //Find a suitable frame in all swap to perform swap out
-    for (; swapIndex < PAGING_MAX_MMSWP; ++swapIndex){
+    for (; swapIndex < PAGING_MAX_MMSWP && failed < 0; ++swapIndex){
       caller->active_mswp = (struct memphy_struct *)(caller->mswp + swapIndex);
       MEMPHY_get_freefp(caller->active_mswp, &vicSwapOff);
       if (vicSwapOff >= 0) break;
@@ -314,6 +313,21 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 
     //No frame in all swaps, get fail
     if (vicSwapOff < 0){
+      failed = 1;
+    }
+
+    //1 of the 2 above failed, give back resources and return -1
+    //All effort failed
+    if (failed >= 0){
+      //Put back the victim pgn if found
+      if (vicpgn >= 0)
+        enlist_pgn_node(&caller->mm->fifo_pgn, vicpgn);
+      //OR
+
+      //Put back the allocated frame
+      if (vicSwapOff >= 0) {
+        MEMPHY_put_freefp(caller->active_mswp, vicSwapOff);
+      }
       return -1;
     }
     
@@ -628,18 +642,23 @@ int find_victim_page(struct mm_struct *mm, int *retpgn)
   //Fifo_pgn doesnt store swapped pages, no need for special checks
   struct pgn_t *pg = mm->fifo_pgn;
 
+  *retpgn = -1;
+
   /* TODO: Implement the theorical mechanism to find the victim page */
-  if (!pg)
-  {
+  if (pg == NULL){
     return -1;
   }
   struct pgn_t *prev = NULL;
-  while (pg->pg_next)
+  while (pg && pg->pg_next)
   {
     prev = pg;
     pg = pg->pg_next;
   }
-  *retpgn = pg->pgn;
+
+  if (pg)
+    *retpgn = pg->pgn;
+  else
+    return -1;
   
   if (prev) prev->pg_next = NULL;
   

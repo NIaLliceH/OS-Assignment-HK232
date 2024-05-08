@@ -169,15 +169,15 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
       //All effort failed
       if (failed > 0){
         //Put back the victim pgn if found
-        if (vicpgn != -1)
+        if (vicpgn >= 0)
           enlist_pgn_node(&caller->mm->fifo_pgn, vicpgn);
         //OR
 
         //Put back the allocated frames
         struct framephy_struct *freefp_str;
-        while (*frm_lst != NULL){
-          freefp_str = *frm_lst;
-          *frm_lst = (*frm_lst)->fp_next;
+        while (newfp_str != NULL){
+          freefp_str = newfp_str;
+          newfp_str = newfp_str->fp_next;
           free(freefp_str);
         }
         return -3000;
@@ -271,9 +271,9 @@ int __swap_cp_page(struct memphy_struct *mpsrc, int srcfpn,
 
     BYTE data;
     MEMPHY_read(mpsrc, addrsrc, &data);
-    #ifdef MMDBG
-      printf("Transfering data: %d\n", data);
-    #endif
+    // #ifdef MMDBG
+    //   printf("Transfering data: %d\n", data);
+    // #endif
     MEMPHY_write(mpdst, addrdst, data);
   }
 
