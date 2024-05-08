@@ -279,11 +279,14 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
     //First try to find a free frame on RAM to swap in
     if (MEMPHY_get_freefp(caller->mram, fpn) == 0){
       //Copy from swap to the newly allocated frame in RAM
-        caller->active_mswp = (struct memphy_struct *)(caller->mswp + swapType);
+      caller->active_mswp = (struct memphy_struct *)(caller->mswp + swapType);
       __swap_cp_page(caller->active_mswp, swapOff, caller->mram, *fpn);
 
       //Set the found fpn to the needed pte
       pte_set_fpn(&mm->pgd[pgn], *fpn);
+
+      //Set the offset on swap as free
+      MEMPHY_put_freefp(caller->active_mswp, swapOff);
 
       //Put pgn back to fifo_pgn list
       enlist_pgn_node(&caller->mm->fifo_pgn, pgn);
@@ -639,15 +642,15 @@ int inc_vma_limit(struct pcb_t *caller, int vmaid, int inc_sz)
  */
 int find_victim_page(struct mm_struct *mm, int *retpgn) 
 {
+  if (mm == NULL || mm->fifo_pgn == NULL){
+    return -1;
+  }
   //Fifo_pgn doesnt store swapped pages, no need for special checks
   struct pgn_t *pg = mm->fifo_pgn;
 
   *retpgn = -1;
 
   /* TODO: Implement the theorical mechanism to find the victim page */
-  if (pg == NULL){
-    return -1;
-  }
   struct pgn_t *prev = NULL;
   while (pg && pg->pg_next)
   {
