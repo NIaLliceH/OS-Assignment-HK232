@@ -1,0 +1,223 @@
+Time slot   0
+ld_routine
+Time slot   1
+	Loaded a process at input/proc/m1s, PID: 1 PRIO: 1
+	CPU 0: Dispatched process  1
+----- TLB ALLOC ----- PID: 1 PC: 1-----
+Before alloc TLB dump:
+
+========PID: 1 ADDR: 0 --- PAGE: 0 ----> FRAME: 1
+========PID: 1 ADDR: 0 --- PAGE: 1 ----> FRAME: 0
+TLB-Alloc: Region start: 0, Region end: 300
+TLB-Alloc: Number of page to cache: 2
+TLB-Alloc: Caching PID: 1 PAGE: 0 FRAME: 1
+TLB-Alloc: Caching PID: 1 PAGE: 1 FRAME: 0
+After alloc TLB dump:
+1 00001 00000 00001
+1 00001 00001 00000
+
+print_pgtbl: 0 - 512
+00000000: 80000001
+00000004: 80000000
+MEMPHY_DUMP:
+--------------
+Time slot   2
+----- TLB ALLOC ----- PID: 1 PC: 2-----
+Before alloc TLB dump:
+1 00001 00000 00001
+1 00001 00001 00000
+
+========PID: 1 ADDR: 512 --- PAGE: 2 ----> FRAME: 2
+TLB-Alloc: Region start: 512, Region end: 612
+TLB-Alloc: Number of page to cache: 1
+TLB-Alloc: Caching PID: 1 PAGE: 2 FRAME: 2
+After alloc TLB dump:
+1 00001 00000 00001
+1 00001 00001 00000
+1 00001 00002 00002
+
+print_pgtbl: 0 - 768
+00000000: 80000001
+00000004: 80000000
+00000008: 80000002
+MEMPHY_DUMP:
+--------------
+	Loaded a process at input/proc/m0s, PID: 2 PRIO: 1
+Time slot   3
+	CPU 0: Put process  1 to run queue
+	CPU 1: Dispatched process  2
+----- TLB ALLOC ----- PID: 2 PC: 1-----
+Before alloc TLB dump:
+1 00001 00000 00001
+1 00001 00001 00000
+1 00001 00002 00002
+	CPU 0: Dispatched process  1
+
+OOM: vm_map_ram out of memory 
+----- TLB FREE ----- PID: 1 PC: 3-----
+reg_index: 0
+Before free TLB dump:
+1 00001 00000 00001
+1 00001 00001 00000
+1 00001 00002 00002
+
+TLB-Free: Freeing PID: 1 PAGE: 0
+TLB-Free: Freeing PID: 1 PAGE: 1
+After free TLB dump:
+1 00001 00002 00002
+
+print_pgtbl: 0 - 768
+00000000: 00000001
+00000004: 00000000
+00000008: 80000002
+MEMPHY_DUMP:
+--------------
+Time slot   4
+----- TLB ALLOC ----- PID: 2 PC: 2-----
+Before alloc TLB dump:
+1 00001 00002 00002
+
+========PID: 2 ADDR: 512 --- PAGE: 2 ----> FRAME: 0
+TLB-Alloc: Region start: 512, Region end: 612
+TLB-Alloc: Number of page to cache: 1
+TLB-Alloc: Caching PID: 2 PAGE: 2 FRAME: 0
+After alloc TLB dump:
+1 00002 00002 00000
+1 00001 00002 00002
+
+print_pgtbl: 0 - 768
+00000000: 00000000
+00000004: 00000000
+00000008: 80000000
+MEMPHY_DUMP:
+--------------
+----- TLB ALLOC ----- PID: 1 PC: 4-----
+Before alloc TLB dump:
+1 00002 00002 00000
+1 00001 00002 00002
+
+========PID: 1 ADDR: 0 --- PAGE: 0 ----> FRAME: 1
+TLB-Alloc: Region start: 0, Region end: 256
+TLB-Alloc: Number of page to cache: 1
+TLB-Alloc: Caching PID: 1 PAGE: 0 FRAME: 1
+After alloc TLB dump:
+1 00002 00002 00000
+1 00001 00000 00001
+1 00001 00002 00002
+
+print_pgtbl: 0 - 768
+00000000: 80000001
+00000004: 00000000
+00000008: 80000002
+MEMPHY_DUMP:
+--------------
+Time slot   5
+	CPU 1: Put process  2 to run queue
+	CPU 1: Dispatched process  2
+----- TLB FREE ----- PID: 2 PC: 3-----
+reg_index: 0
+Before free TLB dump:
+1 00002 00002 00000
+1 00001 00000 00001
+1 00001 00002 00002
+	CPU 0: Put process  1 to run queue
+	CPU 0: Dispatched process  1
+
+After free TLB dump:
+1 00002 00002 00000
+1 00001 00000 00001
+1 00001 00002 00002
+
+print_pgtbl: 0 - 768
+00000000: 00000000
+00000004: 00000000
+00000008: 80000000
+MEMPHY_DUMP:
+--------------
+----- TLB FREE ----- PID: 1 PC: 5-----
+reg_index: 2
+Before free TLB dump:
+1 00002 00002 00000
+1 00001 00000 00001
+1 00001 00002 00002
+
+TLB-Free: Freeing PID: 1 PAGE: 0
+After free TLB dump:
+1 00002 00002 00000
+1 00001 00002 00002
+
+print_pgtbl: 0 - 768
+00000000: 00000001
+00000004: 00000000
+00000008: 80000002
+MEMPHY_DUMP:
+--------------
+Time slot   6
+----- TLB ALLOC ----- PID: 2 PC: 4-----
+Before alloc TLB dump:
+1 00002 00002 00000
+1 00001 00002 00002
+
+========PID: 2 ADDR: 768 --- PAGE: 3 ----> FRAME: 1
+TLB-Alloc: Region start: 768, Region end: 868
+TLB-Alloc: Number of page to cache: 1
+TLB-Alloc: Caching PID: 2 PAGE: 3 FRAME: 1
+After alloc TLB dump:
+1 00002 00002 00000
+1 00002 00003 00001
+1 00001 00002 00002
+
+print_pgtbl: 0 - 1024
+00000000: 00000000
+00000004: 00000000
+00000008: 80000000
+00000012: 80000001
+MEMPHY_DUMP:
+--------------
+----- TLB FREE ----- PID: 1 PC: 6-----
+reg_index: 1
+Before free TLB dump:
+1 00002 00002 00000
+1 00002 00003 00001
+1 00001 00002 00002
+
+TLB-Free: Freeing PID: 1 PAGE: 2
+After free TLB dump:
+1 00002 00002 00000
+1 00002 00003 00001
+
+print_pgtbl: 0 - 768
+00000000: 00000001
+00000004: 00000000
+00000008: 00000002
+MEMPHY_DUMP:
+--------------
+Time slot   7
+	CPU 1: Put process  2 to run queue
+	CPU 1: Dispatched process  2
+----- TLB WRITE ----- PID: 2 PC: 5-----
+Hit: 1
+TLB dump:
+1 00002 00002 00000
+1 00002 00003 00001
+	CPU 0: Processed  1 has finished
+
+
+TLB hit at write pid=2 pgn=2 frm=0
+write region=1 offset=20 data=102
+print_pgtbl: 0 - 1024
+00000000: 00000000
+00000004: 00000000
+00000008: 80000000
+00000012: 80000001
+MEMPHY_DUMP:
+BYTE 00000014: 102
+--------------
+	CPU 0 stopped
+Time slot   8
+----- TLB WRITE ----- PID: 2 PC: 6-----
+write region=2 offset=1000
+Address out of range!
+Time slot   9
+	CPU 1: Processed  2 has finished
+	CPU 1 stopped
