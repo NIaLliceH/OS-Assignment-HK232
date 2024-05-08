@@ -15,4 +15,6 @@
 
 #define TLB_DUMP
 
+#define SYNC
+
 #endif
