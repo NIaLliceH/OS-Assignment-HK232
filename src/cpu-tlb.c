@@ -216,7 +216,7 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   int addr = currg->rg_start + offset;
 
   if (addr > currg->rg_end){
-    #ifdef TLB_DUMP
+    #ifdef IODUMP
       printf("read region=%d offset=%d\n", source, offset); 
       printf("Address out of range!\n");
     #endif
@@ -276,7 +276,7 @@ int tlbread(struct pcb_t * proc, uint32_t source,
   int phyaddr = (frmnum  << PAGING_ADDR_FPN_LOBIT) + off;
   MEMPHY_read(proc->mram, phyaddr, &data);
 
-  #ifdef TLB_DUMP
+  #ifdef IODUMP
     printf("Read data: %d\n", data);
   #endif
 
