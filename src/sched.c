@@ -6,7 +6,10 @@
 
 static struct queue_t ready_queue;
 static struct queue_t run_queue;
+
+#ifdef SYNCH
 static pthread_mutex_t queue_lock;
+#endif
 
 #ifdef MLQ_SCHED
 static struct queue_t mlq_ready_queue[MAX_PRIO];
@@ -37,7 +40,9 @@ void init_scheduler(void)
 #endif
 	ready_queue.size = 0;
 	run_queue.size = 0;
+#ifdef SYNCH
 	pthread_mutex_init(&queue_lock, NULL);
+#endif
 }
 
 #ifdef MLQ_SCHED
@@ -49,8 +54,14 @@ void init_scheduler(void)
  */
 void set_slot_for_queue()
 {
+#ifdef SYNCH
+    pthread_mutex_lock(&queue_lock);
+#endif
 	for (int i = 0; i < MAX_PRIO; i++)
 		slot[i] = MAX_PRIO - i;
+#ifdef SYNCH
+    pthread_mutex_unlock(&queue_lock);
+#endif
 }
 int check_new_process(int i)
 {
@@ -72,15 +83,13 @@ struct pcb_t *get_mlq_proc(void)
 	int flag = 0;
 	for (int i = 0; i < MAX_PRIO; ++i)
 	{
-		pthread_mutex_lock(&queue_lock);
 		check = check_new_process(i);
 		if (check != -2)
 		{
 			i = check;
-			pthread_mutex_unlock(&queue_lock);
 			continue;
 		}
-		// printf("iii:...................................%d\n", i);
+
 		if (empty(&mlq_ready_queue[i]))
 		{
 			if (flag == 1 && i == MAX_PRIO - 1)
@@ -89,7 +98,6 @@ struct pcb_t *get_mlq_proc(void)
 				set_slot_for_queue();
 				i = -1;
 			}
-			pthread_mutex_unlock(&queue_lock);
 			continue;
 		}
 		if (slot[i] <= 0)
@@ -101,13 +109,16 @@ struct pcb_t *get_mlq_proc(void)
 				set_slot_for_queue();
 				i = -1;
 			}
-			pthread_mutex_unlock(&queue_lock);
 			continue;
 		}
-		// printf("i:.... %d slot: %d\n", i, slot[i]);
+#ifdef SYNCH
+        pthread_mutex_lock(&queue_lock);
+#endif
 		proc = dequeue(&mlq_ready_queue[i]);
 		slot[i]--;
+#ifdef SYNCH
 		pthread_mutex_unlock(&queue_lock);
+#endif
 		break;
 	}
 
@@ -116,16 +127,24 @@ struct pcb_t *get_mlq_proc(void)
 
 void put_mlq_proc(struct pcb_t *proc)
 {
-	pthread_mutex_lock(&queue_lock);
+#ifdef SYNCH
+    pthread_mutex_lock(&queue_lock);
+#endif
 	enqueue(&mlq_ready_queue[proc->prio], proc);
-	pthread_mutex_unlock(&queue_lock);
+#ifdef SYNCH
+    pthread_mutex_unlock(&queue_lock);
+#endif
 }
 
 void add_mlq_proc(struct pcb_t *proc)
 {
+#ifdef SYNCH
 	pthread_mutex_lock(&queue_lock);
+#endif
 	enqueue(&mlq_ready_queue[proc->prio], proc);
+#ifdef SYNCH
 	pthread_mutex_unlock(&queue_lock);
+#endif
 }
 
 struct pcb_t *get_proc(void)

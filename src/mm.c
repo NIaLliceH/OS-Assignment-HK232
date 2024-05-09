@@ -132,8 +132,6 @@ int vmap_page_range(struct pcb_t *caller, // process call
 int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struct** frm_lst)
 {
   int pgit, fpn;
-  //struct framephy_struct *newfp_str;
-
   struct framephy_struct *newfp_str = NULL;
 
   for (pgit = 0; pgit < req_pgnum; pgit++)
