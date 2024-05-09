@@ -20,16 +20,14 @@
 #include "cpu-tlbcache.h"
 #include <stdlib.h>
 #include <stdio.h>
-#include <pthread.h>
 
 #ifdef SYNCH
-static pthread_mutex_t tlb_lock;
+pthread_mutex_t tlb_lock;
 #endif
 
 #define init_tlbcache(mp,sz,...) init_memphy(mp, sz, (1, ##__VA_ARGS__))
 
 #define TLB_DBG
-
 
 void print_entry(TLB_entry_t entry){
       printf("%01lld %05lld %05lld %05lld",
@@ -201,12 +199,16 @@ int TLBMEMPHY_write(struct memphy_struct * mp, int addr, TLB_entry_t data)
      return -1;
 
    /* TLB cached is random access by native */
-#ifdef SYNCH
+#ifdef SYNCH 
+#ifndef SYNCH_CACHE_OUT
    pthread_mutex_lock(&tlb_lock);
+#endif 
 #endif
    ((TLB_entry_t *)mp->storage)[addr] = data;
 #ifdef SYNCH
+#ifndef SYNCH_CACHE_OUT
    pthread_mutex_unlock(&tlb_lock);
+#endif
 #endif
 
    return 0;
