@@ -46,9 +46,6 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
     pthread_mutex_lock(&tlb_lock);
   #endif
 
-#ifdef SYNCH
-  pthread_mutex_lock(&tlb_lock);
-#endif
   #ifdef TLB_DUMP
     printf("----- TLB ALLOC ----- PID: %d PC: %d-----\n", proc->pid, proc->pc);
   #endif
