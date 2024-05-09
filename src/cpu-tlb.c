@@ -280,11 +280,14 @@ int tlbread(struct pcb_t * proc, uint32_t source,
     printf("Read data: %d\n", data);
   #endif
 
+  destination = data;
+
   #ifdef IODUMP
     print_pgtbl(proc, 0, -1); //print max TBL
     MEMPHY_dump(proc->mram);
   #endif
-   
+  
+
   return 0;
 }
 
