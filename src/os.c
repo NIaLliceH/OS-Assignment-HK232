@@ -277,7 +277,6 @@ int main(int argc, char *argv[])
 	start_timer();
 #ifdef CPU_TLB
 	struct memphy_struct tlb;
-
 	init_tlbmemphy(&tlb, tlbsz);
 #endif
 
@@ -301,7 +300,6 @@ int main(int argc, char *argv[])
 
 	mm_ld_args->timer_id = ld_event;
 	mm_ld_args->mram = (struct memphy_struct *)&mram;
-	// mm_ld_args->mswp = (struct memphy_struct **)&mswp;
 	mm_ld_args->mswp = (struct memphy_struct **)mswp;
 	mm_ld_args->active_mswp = (struct memphy_struct *)&mswp[0];
 #endif

@@ -211,6 +211,7 @@ int init_memphy(struct memphy_struct *mp, int max_size, int randomflg)
    mp->storage = (BYTE *)malloc(max_size*sizeof(BYTE));
    mp->maxsz = max_size;
 
+   // set all bytes in storage to 0
    for (int i = 0; i < max_size; ++i){
       mp->storage[i] = 0;
    }
