@@ -70,5 +70,9 @@ int init_tlbmemphy(struct memphy_struct *mp, int max_size);
 #define SET_TLB_PID(x, value) TLB_SETVAL(x, value, TLB_ENTRY_PID_MASK, PID_LOBIT)
 #define SET_TLB_FRMNUM(x, value) TLB_SETVAL(x, value, TLB_ENTRY_FRMNUM_MASK, FRMNUM_LOBIT)
 
+#ifdef SYNCH
+#include<pthread.h>
+extern pthread_mutex_t tlb_lock;
+#endif
 
 #endif // TLBCACHE_H

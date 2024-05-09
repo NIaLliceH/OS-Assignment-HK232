@@ -16,5 +16,6 @@
 #define TLB_DUMP
 
 #define SYNCH
+// #define SYNCH_CACHE_OUT
 
 #endif
