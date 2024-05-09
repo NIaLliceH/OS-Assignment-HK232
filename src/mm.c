@@ -149,7 +149,7 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
       if (find_victim_page(caller->mm, &vicpgn) < 0){
         struct framephy_struct *freefp_str;
         while (newfp_str != NULL){
-          MEMPHY_put_freefp(caller->active_mswp, newfp_str->fpn);
+          MEMPHY_put_freefp(caller->mram, newfp_str->fpn);
           
           freefp_str = newfp_str;
           newfp_str = newfp_str->fp_next;
@@ -170,7 +170,7 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
       if (vicSwapOff < 0){
         struct framephy_struct *freefp_str;
         while (newfp_str != NULL){
-          MEMPHY_put_freefp(caller->active_mswp, newfp_str->fpn);
+          MEMPHY_put_freefp(caller->mram, newfp_str->fpn);
           
           freefp_str = newfp_str;
           newfp_str = newfp_str->fp_next;

@@ -5,6 +5,7 @@
         "stdlib.h": "c",
         "stdio.h": "c",
         "cpu-tlbcache.h": "c",
-        "queue.h": "c"
+        "queue.h": "c",
+        "common.h": "c"
     }
 }

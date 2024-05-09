@@ -18,6 +18,7 @@
 #ifdef CPU_TLB
 #include "cpu-tlbcache.h"
 
+
 int tlb_change_all_page_tables_of(struct pcb_t *proc,  struct memphy_struct * mp)
 {
   /* TODO update all page table directory info 
@@ -45,6 +46,9 @@ int tlballoc(struct pcb_t *proc, uint32_t size, uint32_t reg_index)
     pthread_mutex_lock(&tlb_lock);
   #endif
 
+#ifdef SYNCH
+  pthread_mutex_lock(&tlb_lock);
+#endif
   #ifdef TLB_DUMP
     printf("----- TLB ALLOC ----- PID: %d PC: %d-----\n", proc->pid, proc->pc);
   #endif
@@ -306,11 +310,12 @@ int tlbread(struct pcb_t * proc, uint32_t source,
     printf("Read data: %d\n", data);
   #endif
 
+  destination = data;
+
   #ifdef IODUMP
     print_pgtbl(proc, 0, -1); //print max TBL
     MEMPHY_dump(proc->mram);
   #endif
-
   #ifdef SYNCH_CACHE_OUT
     pthread_mutex_unlock(&tlb_lock);
   #endif
