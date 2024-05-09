@@ -7,12 +7,10 @@
 #include "mm.h"
 #include <stdlib.h>
 #include <stdio.h>
-
 #include <pthread.h>
+
 #ifdef SYNCH
-
 static pthread_mutex_t memphy_lock;
-
 #endif
 /*
  *  MEMPHY_mv_csr - move MEMPHY cursor

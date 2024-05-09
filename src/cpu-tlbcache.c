@@ -22,7 +22,9 @@
 #include <stdio.h>
 #include <pthread.h>
 
+#ifdef SYNCH
 static pthread_mutex_t tlb_lock;
+#endif
 
 #define init_tlbcache(mp,sz,...) init_memphy(mp, sz, (1, ##__VA_ARGS__))
 
@@ -246,7 +248,9 @@ int TLBMEMPHY_dump(struct memphy_struct * tlb)
  */
 int init_tlbmemphy(struct memphy_struct *mp, int max_size)
 {
+#ifdef SYNCH
    pthread_mutex_init(&tlb_lock, NULL);
+#endif
    mp->storage = (BYTE *)malloc(max_size*sizeof(BYTE));
    mp->maxsz = max_size;
 
