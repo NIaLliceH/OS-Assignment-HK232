@@ -5,6 +5,7 @@
 #include "loader.h"
 #include "mm.h"
 
+#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -293,7 +294,6 @@ int main(int argc, char *argv[])
 	int sit;
 	for (sit = 0; sit < PAGING_MAX_MMSWP; sit++)
 		init_memphy(&mswp[sit], memswpsz[sit], rdmflag);
-
 
 	/* In Paging mode, it needs passing the system mem to each PCB through loader*/
 	struct mmpaging_ld_args *mm_ld_args = malloc(sizeof(struct mmpaging_ld_args));
