@@ -21,10 +21,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#ifdef SYNCH
+pthread_mutex_t tlb_lock;
+#endif
+
 #define init_tlbcache(mp,sz,...) init_memphy(mp, sz, (1, ##__VA_ARGS__))
 
 #define TLB_DBG
-
 
 void print_entry(TLB_entry_t entry){
       printf("%01lld %05lld %05lld %05lld",
@@ -91,7 +94,6 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
     */
    int storageSz = tlb->maxsz / sizeof(TLB_entry_t);
 
-   // pthread_mutex_lock(&tlb_lock);
    //PRIORITIZE FINDING EXISTING ENTRY TO UPDATE
    for (int index = 0; index < storageSz; index++){
 
@@ -102,10 +104,8 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
       && TLB_TAG(entry) == pgnum 
       && TLB_PID(entry) == pid){
          //FOUND EXISTING ENTRY
-         set_TLB_entry(&entry, 1, pgnum, pid, value);
-         
-         TLBMEMPHY_write(tlb, index, entry);
-
+      set_TLB_entry(&entry, 1, pgnum, pid, value);
+      TLBMEMPHY_write(tlb, index, entry);
          return 0;
       }
    }
@@ -118,6 +118,7 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
       if (!TLB_VALID(entry)){
          //FOUND SPACE
          set_TLB_entry(&entry, 1, pgnum, pid, value);
+
          TLBMEMPHY_write(tlb, index, entry);
 
          return 0;
@@ -130,9 +131,9 @@ int tlb_cache_write(struct memphy_struct *tlb, int pid, int pgnum, int value)
    TLBMEMPHY_read(tlb, r, &victimEntry);
 
    set_TLB_entry(&victimEntry, 1, pgnum, pid, value);
+
    TLBMEMPHY_write(tlb, r, victimEntry);
-   
-   // pthread_mutex_unlock(&tlb_lock);
+
    return 0;
 }
 
@@ -147,7 +148,6 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
 
    int found = -1;
    int index;
-   // pthread_mutex_lock(&tlb_lock);
    for (index = 0; index < storageSz; index++){
       TLB_entry_t entry = 0;
       TLBMEMPHY_read(tlb, index, &entry);
@@ -166,7 +166,6 @@ int tlb_cache_invalidate(struct memphy_struct *tlb, int pid, int pgnum)
          }
       }
    }
-   // pthread_mutex_unlock(&tlb_lock);
 
    return found;
 }
@@ -200,7 +199,17 @@ int TLBMEMPHY_write(struct memphy_struct * mp, int addr, TLB_entry_t data)
      return -1;
 
    /* TLB cached is random access by native */
+#ifdef SYNCH 
+#ifndef SYNCH_CACHE_OUT
+   pthread_mutex_lock(&tlb_lock);
+#endif 
+#endif
    ((TLB_entry_t *)mp->storage)[addr] = data;
+#ifdef SYNCH
+#ifndef SYNCH_CACHE_OUT
+   pthread_mutex_unlock(&tlb_lock);
+#endif
+#endif
 
    return 0;
 }
@@ -241,7 +250,9 @@ int TLBMEMPHY_dump(struct memphy_struct * tlb)
  */
 int init_tlbmemphy(struct memphy_struct *mp, int max_size)
 {
-   // pthread_mutex_init(&tlb_lock, NULL);
+#ifdef SYNCH
+   pthread_mutex_init(&tlb_lock, NULL);
+#endif
    mp->storage = (BYTE *)malloc(max_size*sizeof(BYTE));
    mp->maxsz = max_size;
 
