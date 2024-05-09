@@ -394,6 +394,9 @@ int tlbwrite(struct pcb_t * proc, BYTE data,
   {
     //TLB MISS, GET DATA THROUGH PAGE TABLE
     if (pg_getpage(proc->mm, pgn, &frmnum, proc) != 0){
+      #ifdef TLB_DUMP
+        printf("TLB page fault!:\n");
+      #endif
       #ifdef SYNCH
         pthread_mutex_unlock(&tlb_lock);
       #endif  
