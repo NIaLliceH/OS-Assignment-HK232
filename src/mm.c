@@ -150,11 +150,12 @@ int alloc_pages_range(struct pcb_t *caller, int req_pgnum, struct framephy_struc
 
       if (find_victim_page(caller->mm, &vicpgn) < 0){
         struct framephy_struct *freefp_str;
-        while (newfp_str != NULL){
-          MEMPHY_put_freefp(caller->mram, newfp_str->fpn);
+        struct framephy_struct *frm_lst_iter = *(frm_lst);
+        while (frm_lst_iter != NULL){
+          MEMPHY_put_freefp(caller->mram, frm_lst_iter->fpn);
           
-          freefp_str = newfp_str;
-          newfp_str = newfp_str->fp_next;
+          freefp_str = frm_lst_iter;
+          frm_lst_iter = frm_lst_iter->fp_next;
           free(freefp_str);
         }
         return -3000;
